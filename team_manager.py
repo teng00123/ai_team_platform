@@ -653,6 +653,7 @@ class TeamManager:
         })
 
         # Step 3: 串行调用各 Agent（避免多 subagent 并发争抢 workspace-state.json 锁）
+        total = len(sub_results)
         role_map = {r.id: r for r in target_roles}
         for idx, sr in enumerate(sub_results):
             role = role_map[sr.role_id]
@@ -660,9 +661,19 @@ class TeamManager:
             sr.started_at = datetime.now()
             self._tasks[task.id].sub_tasks = sub_results
             self._save()
+            # 发送更详细的 started 事件，含序号和总数，前端可计算进度
+            self._emit("sub_task_started", {
+                "task_id": task.id, "role_id": role.id,
+                "role_name": role.name, "status": "running",
+                "index": idx, "total": total,
+                "sub_task": sr.sub_task,
+                "started_at": sr.started_at.isoformat(),
+            })
             self._emit("sub_task_update", {
                 "task_id": task.id, "role_id": role.id,
-                "role_name": role.name, "status": "running"
+                "role_name": role.name, "status": "running",
+                "index": idx, "total": total,
+                "sub_task": sr.sub_task,
             })
             try:
                 result = await self._call_agent(role, sr.sub_task)
@@ -672,11 +683,14 @@ class TeamManager:
                 sr.result = f"Error: {e}"
                 sr.status = "failed"
             sr.finished_at = datetime.now()
+            elapsed = round((sr.finished_at - sr.started_at).total_seconds())
             self._tasks[task.id].sub_tasks = sub_results
             self._save()
             self._emit("sub_task_update", {
                 "task_id": task.id, "role_id": role.id,
                 "role_name": role.name, "status": sr.status,
+                "index": idx, "total": total,
+                "elapsed": elapsed,
                 "result": sr.result[:300] if sr.result else ""
             })
             # 相邻子任务间隔 3 秒，让上一个 subagent 完全释放文件锁

@@ -193,8 +193,23 @@ textarea.form-input{resize:vertical;min-height:72px}
   box-shadow:0 8px 24px rgba(0,0,0,.2);white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* ── 编排总进度横幅 ── */
+.orch-banner{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #4338ca;
+  border-radius:14px;padding:14px 18px;margin-bottom:14px;display:none}
+.orch-banner.active{display:block}
+.orch-banner-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.orch-banner-title{font-size:.82rem;font-weight:700;color:#a5b4fc}
+.orch-banner-eta{font-size:.75rem;color:#818cf8;font-family:'Courier New',monospace}
+.orch-progress-track{height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden}
+.orch-progress-fill{height:100%;background:linear-gradient(90deg,#4f6ef7,#7c3aed);
+  border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1);width:0%}
+.orch-step-labels{display:flex;justify-content:space-between;margin-top:6px}
+.orch-step-label{font-size:.62rem;color:#6366f1;white-space:nowrap}
+.orch-step-label.done{color:#6ee7b7}
+.orch-step-label.active{color:#a5b4fc;font-weight:700}
+
 /* ── 子角色执行卡片 ── */
-.sub-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:4px}
+.sub-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:4px}
 .sub-card{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;
   padding:12px 14px;transition:all .3s;position:relative;overflow:hidden}
 .sub-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
@@ -205,6 +220,21 @@ textarea.form-input{resize:vertical;min-height:72px}
 .sub-card.sc-fin{border-color:#6ee7b7}
 .sub-card.sc-fin::before{background:var(--success)}
 @keyframes scanline{0%{background-position:0 0}100%{background-position:200px 0}}
+
+/* 卡片内进度条 */
+.sc-progress{height:3px;background:rgba(79,110,247,.12);border-radius:2px;margin:6px 0;overflow:hidden}
+.sc-progress-bar{height:100%;border-radius:2px;width:0%;transition:width .4s ease}
+.sc-progress-bar.running{background:linear-gradient(90deg,#4f6ef7,#7c3aed);
+  animation:progress-pulse 1.8s ease-in-out infinite;width:100%}
+.sc-progress-bar.done{background:var(--success);width:100%}
+.sc-progress-bar.failed{background:var(--danger);width:100%}
+@keyframes progress-pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* 卡片计时器 */
+.sc-timer{font-size:.65rem;color:var(--muted);font-family:'Courier New',monospace;margin-top:4px}
+.sc-timer.running{color:#818cf8}
+.sc-timer.done{color:#059669}
+.sc-timer.failed{color:var(--danger)}
 
 .sc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .sc-name{font-size:.82rem;font-weight:600;color:var(--text)}
@@ -436,6 +466,17 @@ textarea.form-input{resize:vertical;min-height:72px}
             <div class="wf-step" data-step="summarizing">📊 汇总</div>
           </div>
         </div>
+        <!-- 编排总进度横幅 -->
+        <div class="orch-banner" id="orch-banner">
+          <div class="orch-banner-top">
+            <span class="orch-banner-title" id="orch-banner-title">⏳ 编排进行中…</span>
+            <span class="orch-banner-eta" id="orch-banner-eta">预计剩余 — s</span>
+          </div>
+          <div class="orch-progress-track">
+            <div class="orch-progress-fill" id="orch-progress-fill"></div>
+          </div>
+          <div class="orch-step-labels" id="orch-step-labels"></div>
+        </div>
         <!-- 子角色卡片网格 -->
         <div id="sub-cards" class="sub-cards-grid"></div>
         <!-- 操作日志 -->
@@ -514,6 +555,112 @@ textarea.form-input{resize:vertical;min-height:72px}
 let allRoles=[], allTasks=[];
 const COLORS=['#4f6ef7','#7c3aed','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899'];
 const ICONS=['💼','💻','🎨','📊','🔬','📱','🛡️','🚀','💡','🎯','📝','🔧'];
+
+// ─── 编排进度状态 ────────────────────────────────────────────────
+let orchState = {
+  total: 0,
+  done: 0,
+  startTime: null,          // 整体开始时间
+  roleStartTimes: {},       // roleId -> Date
+  roleElapsed: {},          // roleId -> seconds (完成后)
+  avgElapsed: 60,           // 滚动平均耗时（秒），用于预估
+  timerHandle: null,
+};
+
+function orchStateReset(total) {
+  clearInterval(orchState.timerHandle);
+  orchState = { total, done: 0, startTime: Date.now(), roleStartTimes: {}, roleElapsed: {}, avgElapsed: 60, timerHandle: null };
+  const banner = document.getElementById('orch-banner');
+  if (banner) banner.classList.add('active');
+  updateOrchBanner();
+  orchState.timerHandle = setInterval(updateOrchBanner, 1000);
+}
+
+function orchStateRoleStarted(roleId) {
+  orchState.roleStartTimes[roleId] = Date.now();
+}
+
+function orchStateRoleDone(roleId, elapsed) {
+  orchState.done++;
+  if (elapsed > 0) {
+    orchState.roleElapsed[roleId] = elapsed;
+    const elapsedVals = Object.values(orchState.roleElapsed);
+    orchState.avgElapsed = elapsedVals.reduce((a,b)=>a+b,0)/elapsedVals.length;
+  }
+  updateOrchBanner();
+}
+
+function updateOrchBanner() {
+  const { total, done, startTime, avgElapsed } = orchState;
+  if (!total) return;
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const fill = document.getElementById('orch-progress-fill');
+  if (fill) fill.style.width = pct + '%';
+
+  const title = document.getElementById('orch-banner-title');
+  const eta = document.getElementById('orch-banner-eta');
+  if (title) {
+    if (done >= total) {
+      title.textContent = `✅ 所有角色执行完毕 (${total}/${total})`;
+    } else {
+      title.textContent = `⚡ 执行中 ${done}/${total} 角色完成`;
+    }
+  }
+  if (eta) {
+    const remaining = total - done;
+    if (done >= total) {
+      eta.textContent = `总耗时 ${Math.round((Date.now()-startTime)/1000)}s`;
+    } else {
+      const estRemain = Math.round(remaining * avgElapsed + 3 /* gap */);
+      eta.textContent = `预计剩余 ≈ ${estRemain}s`;
+    }
+  }
+
+  // 步骤标签（角色名 + 耗时）
+  const labelsEl = document.getElementById('orch-step-labels');
+  if (labelsEl && total > 0) {
+    labelsEl.innerHTML = '';
+    // 只显示前5个，防止溢出
+    const roles = Object.keys(orchState.roleStartTimes).slice(0, 5);
+    roles.forEach(rid => {
+      const el = document.createElement('span');
+      const elapsed = orchState.roleElapsed[rid];
+      const running = orchState.roleStartTimes[rid] && !elapsed;
+      el.className = 'orch-step-label' + (elapsed ? ' done' : (running ? ' active' : ''));
+      const role = allRoles.find(r => r.id === rid);
+      const name = role ? role.name.slice(0,4) : rid.slice(0,4);
+      el.textContent = elapsed ? `${name} ${elapsed}s` : (running ? `${name} …` : name);
+      labelsEl.appendChild(el);
+    });
+  }
+}
+
+// 卡片内计时器（运行中每秒更新）
+let cardTimers = {}; // roleId -> { startTs, handle }
+
+function startCardTimer(roleId, cardKey) {
+  stopCardTimer(roleId);
+  const startTs = Date.now();
+  cardTimers[roleId] = { startTs };
+  cardTimers[roleId].handle = setInterval(() => {
+    const el = document.getElementById(`sct-${cardKey}`);
+    if (!el) { stopCardTimer(roleId); return; }
+    const sec = Math.round((Date.now() - startTs) / 1000);
+    el.textContent = `⏱ ${sec}s`;
+  }, 1000);
+}
+
+function stopCardTimer(roleId) {
+  if (cardTimers[roleId]) {
+    clearInterval(cardTimers[roleId].handle);
+    delete cardTimers[roleId];
+  }
+}
+
+function stopAllCardTimers() {
+  Object.keys(cardTimers).forEach(stopCardTimer);
+}
 
 // ─── Toast ─────────────────────────────────────────────────────
 function toast(msg,dur=2600){
@@ -953,22 +1100,44 @@ function startOrchSSE(taskId){
   orchSSE.onmessage=e=>{
     try{
       const raw=JSON.parse(e.data);
-      // 兼容两种格式：{event, data} 或扁平格式
       const evName=raw.event||raw.type||'';
       const d=raw.data||raw;
       if(evName==='ping'||evName==='connected')return;
+
       if(evName==='orchestration_start'){
+        const total = (d.target_roles||[]).length;
+        orchStateReset(total);
         renderSubPanel([], d.target_roles||[]);
         updateOrchLog(`👑 主控开始编排，目标成员：${(d.target_roles||[]).join('、')}`);
+
       } else if(evName==='orchestration_step'){
         const stepMap={analyzing:'🧠 分析任务',planned:'⚡ 拆解完成',dispatching:'📤 下发各角色',summarizing:'📊 汇总中…'};
         updateOrchLog(stepMap[d.step]||d.step);
         updateWfStep(d.step);
+
+      } else if(evName==='sub_task_started'){
+        orchStateRoleStarted(d.role_id);
+        updateSubCard(d);
+        startCardTimer(d.role_id, (d.role_id||'').replace(/[^a-z0-9]/gi,'_'));
+        updateOrchLog(`▶ [${d.index+1}/${d.total}] ${d.role_name} 开始执行`);
+        if(drawerRoleId===d.role_id) refreshDrawer();
+
       } else if(evName==='sub_task_update'){
         updateSubCard(d);
-        if(drawerRoleId===d.role_id)refreshDrawer();
+        if(d.status==='done'||d.status==='failed'){
+          stopCardTimer(d.role_id);
+          orchStateRoleDone(d.role_id, d.elapsed||0);
+          const icon = d.status==='done'?'✅':'❌';
+          const costStr = d.elapsed ? ` (${d.elapsed}s)` : '';
+          updateOrchLog(`${icon} ${d.role_name} 执行${d.status==='done'?'完成':'失败'}${costStr}`);
+        }
+        if(drawerRoleId===d.role_id) refreshDrawer();
+
       } else if(evName==='orchestration_done'){
         updateOrchLog('🎉 所有角色已完成，主控正在汇总报告…');
+        stopAllCardTimers();
+        clearInterval(orchState.timerHandle);
+        updateOrchBanner();
         if(orchSSE){orchSSE.close();orchSSE=null;}
       }
     }catch(err){}
@@ -990,6 +1159,8 @@ function renderSubPanel(subTasks, roleNames){
         <span class="sc-badge sc-${st.status||'pending'}">${statusLabel(st.status||'pending')}</span>
       </div>
       <div class="sc-task">${st.sub_task||'等待分配…'}</div>
+      <div class="sc-progress"><div class="sc-progress-bar ${st.status||'pending'}" id="scpb-${key}"></div></div>
+      <div class="sc-timer ${st.status||'pending'}" id="sct-${key}">—</div>
       <div class="sc-result" id="scr-${key}">${
         st.result?`<div class="sc-result-text">${st.result.slice(0,200)}${st.result.length>200?'…':''}</div>`:
         '<div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>'
@@ -1016,6 +1187,8 @@ function updateSubCard(data){
         <span class="sc-badge sc-${data.status}">${statusLabel(data.status)}</span>
       </div>
       <div class="sc-task">${data.sub_task||''}</div>
+      <div class="sc-progress"><div class="sc-progress-bar ${data.status}" id="scpb-${key}"></div></div>
+      <div class="sc-timer ${data.status}" id="sct-${key}">—</div>
       <div class="sc-result" id="scr-${key}">
         <div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
       </div>
@@ -1023,7 +1196,6 @@ function updateSubCard(data){
     grid.appendChild(card);
     return;
   }
-  // 补充 onclick（若之前不知道 role_id）
   if(data.role_id && !card.getAttribute('onclick')){
     card.setAttribute('onclick',`openDrawer('${data.role_id}','${currentOrchTaskId||''}')`);
     card.title='点击查看执行详情';
@@ -1031,6 +1203,20 @@ function updateSubCard(data){
   const badge=card.querySelector('.sc-badge');
   if(badge){badge.className=`sc-badge sc-${data.status}`;badge.textContent=statusLabel(data.status);}
   if(data.sub_task){const t=card.querySelector('.sc-task');if(t)t.textContent=data.sub_task;}
+  // 进度条
+  const pb=document.getElementById(`scpb-${key}`);
+  if(pb){pb.className=`sc-progress-bar ${data.status}`;}
+  // 计时器
+  const timerEl=document.getElementById(`sct-${key}`);
+  if(timerEl){
+    timerEl.className=`sc-timer ${data.status}`;
+    if((data.status==='done'||data.status==='failed')&&data.elapsed){
+      timerEl.textContent=(data.status==='done'?'✅ ':'❌ ')+data.elapsed+'s';
+    } else if(data.status==='running'){
+      timerEl.textContent='⏱ 0s';
+    }
+  }
+  // 结果区
   const res=document.getElementById(`scr-${key}`);
   if(res){
     if(data.status==='running'){
@@ -1097,12 +1283,18 @@ async function runOrch(){
   rb.style.display='block';
   rb.innerHTML='';
   currentOrchTaskId=null;
+  stopAllCardTimers();
 
   // 初始化面板
   document.getElementById('sub-exec-panel').style.display='block';
   document.getElementById('sub-cards').innerHTML='<div style="color:var(--muted);font-size:.82rem">⏳ 等待主控分配任务…</div>';
   const logEl=document.getElementById('orch-log');
   if(logEl)logEl.innerHTML='';
+  // 重置进度横幅（总数等 orchestration_start 事件确定后再初始化）
+  const banner=document.getElementById('orch-banner');
+  if(banner){banner.classList.remove('active');}
+  const fill=document.getElementById('orch-progress-fill');
+  if(fill)fill.style.width='0%';
 
   // 初始化工作流步骤
   const wfEl=document.getElementById('wf-steps-inline');
