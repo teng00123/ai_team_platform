@@ -94,17 +94,19 @@ async def send_task(role_id: str, req: SendTaskRequest):
 
 # ─── 主控编排 API ────────────────────────────────────────────────
 
-@app.post("/orchestrate", response_model=TeamTask, summary="主控编排任务")
+@app.post("/orchestrate", summary="主控编排任务（异步，立即返回 task_id）")
 async def orchestrate(req: OrchestrationRequest):
     """
-    主控角色接收总任务 → 自动拆解 → 并发下发给子角色 → 汇总结果
+    立即返回 task_id，后台异步执行编排全流程。
+    前端通过 SSE /events 实时接收进度，或 GET /tasks/{id} 轮询状态。
     """
     try:
-        return await manager.orchestrate(
+        task = await manager.orchestrate_async(
             controller_id=req.controller_id,
             message=req.message,
             target_role_ids=req.target_role_ids,
         )
+        return {"ok": True, "task_id": task.id, "status": task.status, "message": task.message}
     except ValueError as e:
         raise HTTPException(400, str(e))
 

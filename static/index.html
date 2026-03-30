@@ -1279,9 +1279,9 @@ async function runOrch(){
   const btn=document.getElementById('orch-btn');
   const rb=document.getElementById('orch-result');
 
-  btn.disabled=true; btn.textContent='⏳ 编排中…';
+  btn.disabled=true; btn.textContent='⏳ 提交中…';
   rb.style.display='block';
-  rb.innerHTML='';
+  rb.innerHTML='<div style="color:var(--muted);font-size:.85rem">⏳ 提交编排任务…</div>';
   currentOrchTaskId=null;
   stopAllCardTimers();
 
@@ -1290,20 +1290,15 @@ async function runOrch(){
   document.getElementById('sub-cards').innerHTML='<div style="color:var(--muted);font-size:.82rem">⏳ 等待主控分配任务…</div>';
   const logEl=document.getElementById('orch-log');
   if(logEl)logEl.innerHTML='';
-  // 重置进度横幅（总数等 orchestration_start 事件确定后再初始化）
   const banner=document.getElementById('orch-banner');
   if(banner){banner.classList.remove('active');}
   const fill=document.getElementById('orch-progress-fill');
   if(fill)fill.style.width='0%';
-
-  // 初始化工作流步骤
   const wfEl=document.getElementById('wf-steps-inline');
   if(wfEl)wfEl.querySelectorAll('.wf-step').forEach(el=>{el.classList.remove('wf-done','wf-active');});
 
-  // 先订阅 SSE，再发请求
-  startOrchSSE(null);
-  updateOrchLog('🚀 开始编排任务：'+msg);
-
+  // ── 发请求（非阻塞，后端立刻返回 task_id）──────────────────────
+  let taskId = null;
   try{
     let res;
     try{
@@ -1317,37 +1312,66 @@ async function runOrch(){
       try{ const j=await res.json(); errMsg=j.detail||JSON.stringify(j); }catch(_){}
       throw new Error(errMsg);
     }
-    const task=await res.json();
-    currentOrchTaskId=task.id;
-
-    // 同步到 allTasks 以便抽屉使用
-    const existing=allTasks.findIndex(t=>t.id===task.id);
-    if(existing>=0)allTasks[existing]=task; else allTasks.unshift(task);
-
-    // 用返回的 sub_tasks 刷新卡片（最终状态，含完整 role_id）
-    // 同时修复 SSE 阶段绑定时 taskId 为空的问题
-    if(task.sub_tasks?.length){
-      renderSubPanel(task.sub_tasks,[]);
-      // 确保所有卡片都绑定了正确的 taskId
-      task.sub_tasks.forEach(st=>{
-        const key=st.role_id.replace(/[^a-z0-9]/gi,'_');
-        const card=document.getElementById(`sc-${key}`);
-        if(card) card.setAttribute('onclick',`openDrawer('${st.role_id}','${task.id}')`);
-      });
-    }
-    rb.innerHTML=`
-      <div style="color:var(--success);font-weight:700;margin-bottom:10px;font-size:1rem">🎉 编排完成！</div>
-      <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">👆 点击上方各角色卡片可查看完整执行结果</div>
-      <div style="white-space:pre-wrap;font-size:.82rem;line-height:1.7;color:var(--text2)">${task.result||'（无汇总内容）'}</div>`;
-    updateOrchLog('🎉 编排完成，主控已汇总结果');
-    toast('🎉 编排任务完成！点击角色卡片查看详情');
-    await loadAll();
+    const resp=await res.json();
+    taskId=resp.task_id;
+    currentOrchTaskId=taskId;
+    rb.innerHTML=`<div style="color:var(--primary);font-size:.85rem">⚡ 编排进行中（task: ${taskId.slice(0,8)}…）<br><span style="color:var(--muted);font-size:.78rem">各角色执行状态实时更新如下 ↑</span></div>`;
+    updateOrchLog('🚀 任务已提交，主控开始编排：'+msg);
+    toast('⚡ 编排已启动，实时查看下方进度');
+    btn.textContent='⏳ 编排中…';
   }catch(e){
     rb.innerHTML=`<div style="color:var(--danger)">❌ ${e.message}</div>`;
-    updateOrchLog('❌ 编排失败：'+e.message);
+    updateOrchLog('❌ 提交失败：'+e.message);
+    btn.disabled=false; btn.textContent='⚡ 下达指令并编排';
+    return;
   }
-  btn.disabled=false; btn.textContent='⚡ 下达指令并编排';
+
+  // ── 订阅 SSE，实时接收编排进度 ─────────────────────────────────
+  startOrchSSE(taskId);
+
+  // ── 轮询任务完成（SSE 关闭后兜底同步最终状态）──────────────────
+  const pollDone = async () => {
+    for(let i=0; i<120; i++){
+      await new Promise(r=>setTimeout(r,3000));
+      try{
+        const r=await fetch(`/tasks/${taskId}`);
+        if(!r.ok) continue;
+        const task=await r.json();
+        const existing=allTasks.findIndex(t=>t.id===task.id);
+        if(existing>=0)allTasks[existing]=task; else allTasks.unshift(task);
+        if(task.status==='done'||task.status==='failed'){
+          // 用最终 sub_tasks 更新卡片，确保完整 role_id 绑定
+          if(task.sub_tasks?.length){
+            task.sub_tasks.forEach(st=>{
+              updateSubCard({...st, task_id: task.id});
+              const key=(st.role_id||'').replace(/[^a-z0-9]/gi,'_');
+              const card=document.getElementById(`sc-${key}`);
+              if(card) card.setAttribute('onclick',`openDrawer('${st.role_id}','${task.id}')`);
+            });
+          }
+          if(task.status==='done'){
+            rb.innerHTML=`
+              <div style="color:var(--success);font-weight:700;margin-bottom:10px;font-size:1rem">🎉 编排完成！</div>
+              <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">👆 点击上方各角色卡片可查看完整执行结果</div>
+              <div style="white-space:pre-wrap;font-size:.82rem;line-height:1.7;color:var(--text2)">${task.result||'（无汇总内容）'}</div>`;
+            updateOrchLog('🎉 编排完成，主控已汇总结果');
+            toast('🎉 编排任务完成！点击角色卡片查看详情');
+          } else {
+            rb.innerHTML=`<div style="color:var(--danger)">❌ 编排失败：${task.result||''}</div>`;
+          }
+          btn.disabled=false; btn.textContent='⚡ 下达指令并编排';
+          await loadAll();
+          return;
+        }
+      }catch(_){}
+    }
+    // 超时（6分钟）
+    rb.innerHTML+='<br><span style="color:var(--warn);font-size:.8rem">⚠️ 等待超时，请刷新页面查看最新状态</span>';
+    btn.disabled=false; btn.textContent='⚡ 下达指令并编排';
+  };
+  pollDone(); // 不 await，后台跑
 }
+
 
 async function sendTask(){
   const roleId=document.getElementById('sel-role').value;

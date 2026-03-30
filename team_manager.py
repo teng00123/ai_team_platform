@@ -587,6 +587,154 @@ class TeamManager:
         return task
 
     # ── 主控编排 ──────────────────────────────────────────────────
+
+    async def orchestrate_async(
+        self,
+        controller_id: str,
+        message: str,
+        target_role_ids: Optional[List[str]] = None,
+    ) -> TeamTask:
+        """
+        立即创建任务并返回，后台启动 asyncio.create_task 异步执行全流程。
+        前端通过 SSE 实时接收进度，不再阻塞 HTTP 请求。
+        """
+        controller = self._roles.get(controller_id)
+        if not controller:
+            raise ValueError(f"主控角色 {controller_id} 不存在")
+
+        if target_role_ids:
+            target_roles = [self._roles[rid] for rid in target_role_ids if rid in self._roles]
+        else:
+            target_roles = [r for r in self._roles.values()
+                            if not r.is_controller and r.is_active]
+
+        if not target_roles:
+            raise ValueError("没有可用的子角色，请先添加非主控角色")
+
+        # 创建任务，立刻入库
+        task = TeamTask(
+            role_id=controller_id,
+            message=message,
+            status="pending",
+            is_orchestrated=True,
+        )
+        self._tasks[task.id] = task
+        self._save()
+
+        # 后台跑，立即返回
+        asyncio.create_task(
+            self._orchestrate_background(task.id, controller, target_roles, message)
+        )
+        return task
+
+    async def _orchestrate_background(
+        self,
+        task_id: str,
+        controller,
+        target_roles,
+        message: str,
+    ):
+        """真正的编排逻辑，在后台 task 中执行，通过 SSE 推送进度"""
+        task = self._tasks[task_id]
+        task.status = "running"
+        self._tasks[task_id] = task
+        self._save()
+
+        self._emit("orchestration_start", {
+            "task_id": task_id,
+            "controller": controller.name,
+            "target_roles": [r.name for r in target_roles],
+            "message": message,
+        })
+
+        try:
+            # Step 1: 主控分析
+            self._emit("orchestration_step", {"task_id": task_id, "step": "analyzing", "controller": controller.name})
+            await asyncio.sleep(0.3)
+            plan_text = await self._controller_analyze(controller, message, target_roles)
+            task.orchestration_plan = plan_text
+            self._tasks[task_id] = task
+            self._save()
+            self._emit("orchestration_step", {"task_id": task_id, "step": "planned", "plan": plan_text})
+
+            # Step 2: 拆解子任务
+            sub_task_map = decompose_task_builtin(message, target_roles)
+            sub_results: List[SubTaskResult] = []
+            for role in target_roles:
+                sr = SubTaskResult(
+                    role_id=role.id,
+                    role_name=role.name,
+                    sub_task=sub_task_map.get(role.id, message),
+                    status="pending",
+                )
+                sub_results.append(sr)
+            task.sub_tasks = sub_results
+            self._tasks[task_id] = task
+            self._save()
+            self._emit("orchestration_step", {
+                "task_id": task_id, "step": "dispatching",
+                "sub_tasks": [{"role": sr.role_name, "task": sr.sub_task[:100]} for sr in sub_results]
+            })
+
+            # Step 3: 串行执行各角色（避免文件锁竞争）
+            total = len(sub_results)
+            role_map = {r.id: r for r in target_roles}
+            for idx, sr in enumerate(sub_results):
+                role = role_map[sr.role_id]
+                sr.status = "running"
+                sr.started_at = datetime.now()
+                self._tasks[task_id].sub_tasks = sub_results
+                self._save()
+                self._emit("sub_task_started", {
+                    "task_id": task_id, "role_id": role.id, "role_name": role.name,
+                    "status": "running", "index": idx, "total": total,
+                    "sub_task": sr.sub_task, "started_at": sr.started_at.isoformat(),
+                })
+                self._emit("sub_task_update", {
+                    "task_id": task_id, "role_id": role.id, "role_name": role.name,
+                    "status": "running", "index": idx, "total": total, "sub_task": sr.sub_task,
+                })
+                try:
+                    result = await self._call_agent(role, sr.sub_task)
+                    sr.result = result
+                    sr.status = "done"
+                except Exception as e:
+                    sr.result = f"Error: {e}"
+                    sr.status = "failed"
+                sr.finished_at = datetime.now()
+                elapsed = round((sr.finished_at - sr.started_at).total_seconds())
+                self._tasks[task_id].sub_tasks = sub_results
+                self._save()
+                self._emit("sub_task_update", {
+                    "task_id": task_id, "role_id": role.id, "role_name": role.name,
+                    "status": sr.status, "index": idx, "total": total,
+                    "sub_task": sr.sub_task, "result": (sr.result or "")[:500],
+                    "elapsed": elapsed,
+                })
+                if idx < total - 1:
+                    await asyncio.sleep(3)
+
+            # Step 4: 汇总
+            self._emit("orchestration_step", {"task_id": task_id, "step": "summarizing"})
+            summary = await self._controller_summarize(controller, message, sub_results)
+            task.result = summary
+            task.status = "done"
+            task.sub_tasks = sub_results
+            self._tasks[task_id] = task
+            self._save()
+            self._emit("orchestration_done", {
+                "task_id": task_id, "status": "done",
+                "result": summary[:500] if summary else "",
+            })
+
+        except Exception as e:
+            print(f"[orchestrate_background] error: {e}")
+            task.status = "failed"
+            task.result = f"编排失败：{e}"
+            self._tasks[task_id] = task
+            self._save()
+            self._emit("orchestration_done", {"task_id": task_id, "status": "failed", "error": str(e)})
+
     async def orchestrate(
         self,
         controller_id: str,
