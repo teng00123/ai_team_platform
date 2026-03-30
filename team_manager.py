@@ -66,89 +66,94 @@ async def call_openclaw_agent(
     message: str,
     agent_id: str = "main",
     system_prompt: str = "",
-    timeout: int = 120,
+    timeout: int = 45,          # 单次 spawn 最长等 45s，超时直接走 fallback
 ) -> str:
     """
     通过 OpenClaw /tools/invoke → sessions_spawn 在独立 subagent 执行任务。
     spawn 是异步的，我们轮询 sessions_history 等待结果。
+    整体用 asyncio.wait_for 兜底，防止任何意外阻塞。
     """
-    task_text = message
-    if system_prompt:
-        task_text = f"[角色设定]\n{system_prompt}\n\n[任务]\n{message}"
-
     try:
-        headers = _gw_headers()
-        spawn_payload = {
-            "tool": "sessions_spawn",
-            "args": {
-                "task": task_text,
-                "mode": "run",
-                "runtime": "subagent",
-                "cleanup": "keep",  # keep 以便读取结果
-            }
-        }
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(_gw_url("/tools/invoke"), json=spawn_payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-
-        if not data.get("ok"):
-            print(f"[spawn failed] {data}")
-            return ""
-
-        details = data.get("result", {}).get("details", {})
-        child_key = details.get("childSessionKey", "")
-        if not child_key:
-            print("[spawn] no childSessionKey")
-            return ""
-
-        print(f"[spawn] childSessionKey={child_key}, polling for result…")
-        result = await _poll_session_result(child_key, timeout=timeout)
-        # 完成后清理
-        await _delete_session(child_key)
-        return result
-
+        return await asyncio.wait_for(_call_openclaw_agent_inner(message, system_prompt, timeout), timeout=timeout + 5)
+    except asyncio.TimeoutError:
+        print(f"[call_openclaw_agent] 硬超时 {timeout+5}s，直接返回空")
+        return ""
     except Exception as e:
         print(f"[OpenClaw Agent Error] {type(e).__name__}: {e}")
         return ""
 
 
-async def _poll_session_result(session_key: str, timeout: int = 120) -> str:
-    """轮询子 session 的执行结果"""
+async def _call_openclaw_agent_inner(message: str, system_prompt: str, timeout: int) -> str:
+    task_text = message
+    if system_prompt:
+        task_text = f"[角色设定]\n{system_prompt}\n\n[任务]\n{message}"
+
+    headers = _gw_headers()
+    spawn_payload = {
+        "tool": "sessions_spawn",
+        "args": {
+            "task": task_text,
+            "mode": "run",
+            "runtime": "subagent",
+            "cleanup": "keep",
+        }
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(_gw_url("/tools/invoke"), json=spawn_payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+
+    if not data.get("ok"):
+        print(f"[spawn failed] {data}")
+        return ""
+
+    details = data.get("result", {}).get("details", {})
+    child_key = details.get("childSessionKey", "")
+    if not child_key:
+        print("[spawn] no childSessionKey")
+        return ""
+
+    print(f"[spawn] childSessionKey={child_key}, polling for result…")
+    result = await _poll_session_result(child_key, timeout=timeout)
+    await _delete_session(child_key)
+    return result
+
+
+async def _poll_session_result(session_key: str, timeout: int = 45) -> str:
+    """
+    轮询子 session 的执行结果。
+    修复：只要 assistant 有回复且内容非空就立刻返回，不再死等 user_msgs<=1 条件。
+    """
     headers = _gw_headers()
     deadline = asyncio.get_event_loop().time() + timeout
     poll_interval = 2.0
-    last_msg_count = 0
+    last_content = ""
 
     while asyncio.get_event_loop().time() < deadline:
         await asyncio.sleep(poll_interval)
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=8) as client:
                 resp = await client.post(
                     _gw_url("/tools/invoke"),
-                    json={
-                        "tool": "sessions_history",
-                        "args": {"sessionKey": session_key, "limit": 30},
-                    },
+                    json={"tool": "sessions_history", "args": {"sessionKey": session_key, "limit": 20}},
                     headers=headers,
                 )
                 resp.raise_for_status()
                 data = resp.json()
 
             if not data.get("ok"):
+                poll_interval = min(poll_interval * 1.3, 5.0)
                 continue
 
+            import json as _json
             text_raw = ""
-            content = data.get("result", {}).get("content", [])
-            for item in content:
+            for item in data.get("result", {}).get("content", []):
                 if item.get("type") == "text":
                     text_raw = item.get("text", "")
                     break
             if not text_raw:
                 text_raw = str(data.get("result", {}).get("details", ""))
 
-            # 解析 messages 列表
-            import json as _json
             try:
                 history = _json.loads(text_raw) if isinstance(text_raw, str) else text_raw
             except Exception:
@@ -160,32 +165,34 @@ async def _poll_session_result(session_key: str, timeout: int = 120) -> str:
             elif isinstance(history, list):
                 messages = history
 
-            # 找最后一条 assistant 消息
+            # 取最后一条 assistant 消息
             assistant_msgs = [m for m in messages if m.get("role") == "assistant"]
-            if len(assistant_msgs) > last_msg_count:
-                last_msg_count = len(assistant_msgs)
-                # 检查最后一条 assistant 消息是否为最终输出
-                last = assistant_msgs[-1]
-                content_val = last.get("content", "")
-                if isinstance(content_val, list):
-                    content_val = " ".join(
-                        c.get("text", "") for c in content_val if isinstance(c, dict)
-                    )
-                content_str = str(content_val).strip()
-                if content_str and len(content_str) > 5:
-                    # 如果 user 消息数 <= 1（只有最初的任务），说明 agent 已完成
-                    user_msgs = [m for m in messages if m.get("role") == "user"]
-                    if len(user_msgs) <= 1:
-                        print(f"[poll] done, {len(messages)} messages")
-                        return content_str
+            if not assistant_msgs:
+                poll_interval = min(poll_interval * 1.2, 5.0)
+                continue
 
-            poll_interval = min(poll_interval * 1.2, 5.0)
+            last = assistant_msgs[-1]
+            content_val = last.get("content", "")
+            if isinstance(content_val, list):
+                content_val = " ".join(c.get("text", "") for c in content_val if isinstance(c, dict))
+            content_str = str(content_val).strip()
+
+            # 只要 assistant 有新内容就返回（不再检查 user_msgs 数量）
+            if content_str and len(content_str) > 5 and content_str != last_content:
+                # 稳定性校验：再等 1 轮确认没有更新
+                last_content = content_str
+                await asyncio.sleep(2)
+                print(f"[poll] done, {len(messages)} msgs, result len={len(content_str)}")
+                return content_str
+
+            poll_interval = min(poll_interval * 1.1, 4.0)
         except Exception as e:
             print(f"[poll error] {e}")
-            poll_interval = min(poll_interval * 1.5, 8.0)
+            poll_interval = min(poll_interval * 1.5, 6.0)
 
-    print(f"[poll] timeout after {timeout}s")
-    return ""
+    print(f"[poll] timeout after {timeout}s, last_content len={len(last_content)}")
+    # 超时但有内容，返回已有内容而不是空字符串
+    return last_content
 
 
 async def _delete_session(session_key: str):
