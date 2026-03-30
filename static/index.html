@@ -193,10 +193,130 @@ textarea.form-input{resize:vertical;min-height:72px}
   box-shadow:0 8px 24px rgba(0,0,0,.2);white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* ── 子角色执行卡片 ── */
+.sub-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:4px}
+.sub-card{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;
+  padding:12px 14px;transition:all .3s;position:relative;overflow:hidden}
+.sub-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--border);transition:background .3s}
+.sub-card.sc-active{border-color:#818cf8;box-shadow:0 0 0 2px rgba(129,140,248,.2)}
+.sub-card.sc-active::before{background:linear-gradient(90deg,#4f6ef7,#7c3aed,#4f6ef7);
+  background-size:200px 100%;animation:scanline 1.5s linear infinite}
+.sub-card.sc-fin{border-color:#6ee7b7}
+.sub-card.sc-fin::before{background:var(--success)}
+@keyframes scanline{0%{background-position:0 0}100%{background-position:200px 0}}
+
+.sc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sc-name{font-size:.82rem;font-weight:600;color:var(--text)}
+.sc-badge{font-size:.64rem;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+.sc-pending{background:#f1f5f9;color:var(--muted)}
+.sc-running{background:#ede9fe;color:#7c3aed;animation:pulse-badge .8s ease-in-out infinite alternate}
+.sc-done{background:#d1fae5;color:#059669}
+.sc-failed{background:#fee2e2;color:#dc2626}
+@keyframes pulse-badge{from{opacity:.7}to{opacity:1}}
+
+.sc-task{font-size:.72rem;color:var(--text2);margin-bottom:8px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  line-height:1.5;min-height:2.2em}
+.sc-result{min-height:32px}
+.sc-result-text{font-size:.71rem;color:var(--text2);line-height:1.6;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+
+/* 思考动效 */
+.sc-thinking{display:flex;gap:4px;align-items:center;padding:4px 0}
+.sc-thinking .dot{width:6px;height:6px;border-radius:50%;background:var(--primary);
+  animation:bounce-dot .9s ease-in-out infinite}
+.sc-thinking .dot:nth-child(2){animation-delay:.2s;background:var(--primary2)}
+.sc-thinking .dot:nth-child(3){animation-delay:.4s;background:var(--success)}
+@keyframes bounce-dot{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-5px);opacity:1}}
+
+/* 工作流步骤条 */
+.wf-step{font-size:.64rem;padding:3px 8px;border-radius:6px;
+  background:#f1f5f9;color:var(--muted);font-weight:500;transition:all .3s;white-space:nowrap}
+.wf-step.wf-active{background:#ede9fe;color:#7c3aed;font-weight:700;
+  box-shadow:0 0 0 2px rgba(124,58,237,.2)}
+.wf-step.wf-done{background:#d1fae5;color:#059669}
+.wf-arrow{font-size:.6rem;color:var(--muted)}
+
+/* 操作日志 */
+.orch-log{background:#0f172a;border:1px solid #1e293b;border-radius:8px;
+  padding:10px 12px;font-size:.7rem;font-family:'Courier New',monospace;
+  max-height:130px;overflow-y:auto;line-height:1.9;color:#94a3b8}
+.orch-log-line{display:flex;gap:8px;align-items:baseline}
+.orch-log-time{color:#475569;font-size:.63rem;white-space:nowrap;flex-shrink:0}
+
 /* 滚动条 */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── 详情抽屉 ── */
+.drawer-mask{position:fixed;inset:0;background:rgba(10,15,40,.45);backdrop-filter:blur(4px);
+  z-index:500;opacity:0;pointer-events:none;transition:opacity .25s}
+.drawer-mask.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;right:0;top:0;bottom:0;width:540px;max-width:96vw;
+  background:var(--surface);box-shadow:-8px 0 40px rgba(0,0,0,.18);
+  z-index:501;display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .3s cubic-bezier(.22,1,.36,1)}
+.drawer.open{transform:translateX(0)}
+.drawer-head{padding:20px 24px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:14px;flex-shrink:0}
+.drawer-avatar{width:52px;height:52px;border-radius:50%;flex-shrink:0;overflow:hidden;
+  border:2px solid var(--border2)}
+.drawer-title{flex:1;min-width:0}
+.drawer-name{font-weight:700;font-size:1.05rem;color:var(--text)}
+.drawer-meta{font-size:.75rem;color:var(--muted);margin-top:2px}
+.drawer-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);
+  background:transparent;cursor:pointer;font-size:1rem;display:flex;align-items:center;
+  justify-content:center;color:var(--muted);transition:.2s;flex-shrink:0}
+.drawer-close:hover{background:var(--bg);color:var(--text)}
+
+.drawer-body{flex:1;overflow-y:auto;padding:20px 24px}
+.drawer-body::-webkit-scrollbar{width:4px}
+.drawer-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+.d-section{margin-bottom:20px}
+.d-section-title{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.d-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.d-task-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  padding:12px 14px;font-size:.82rem;color:var(--text2);line-height:1.7;white-space:pre-wrap}
+
+.d-status-row{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.d-status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.d-status-dot.running{background:#818cf8;animation:pulse-dot .8s ease-in-out infinite alternate}
+.d-status-dot.done{background:var(--success)}
+.d-status-dot.failed{background:var(--danger)}
+.d-status-dot.pending{background:var(--muted)}
+@keyframes pulse-dot{from{opacity:.5}to{opacity:1;box-shadow:0 0 6px currentColor}}
+.d-status-label{font-size:.82rem;font-weight:600;color:var(--text)}
+.d-timing{margin-left:auto;font-size:.72rem;color:var(--muted)}
+
+/* Markdown-ish 结果渲染 */
+.d-result-box{background:#0f172a;border:1px solid #1e293b;border-radius:10px;
+  padding:16px;font-size:.78rem;line-height:1.85;color:#e2e8f0;
+  font-family:'Courier New',monospace;white-space:pre-wrap;overflow-x:auto}
+.d-result-box.thinking{display:flex;align-items:center;gap:10px;
+  background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
+
+/* 实时日志（执行中） */
+.d-live-log{background:#0f172a;border:1px solid #1e293b;border-radius:10px;
+  padding:12px 14px;max-height:260px;overflow-y:auto;
+  font-size:.72rem;font-family:'Courier New',monospace;color:#94a3b8;line-height:1.9}
+.d-live-log-line{display:flex;gap:8px}
+.d-live-ts{color:#475569;white-space:nowrap;flex-shrink:0}
+.d-live-log::-webkit-scrollbar{width:4px}
+.d-live-log::-webkit-scrollbar-thumb{background:#1e293b;border-radius:2px}
+
+/* 卡片 hover 提示 */
+.sub-card{cursor:pointer}
+.sub-card:hover{border-color:var(--primary);transform:translateY(-2px);
+  box-shadow:0 6px 20px rgba(79,110,247,.15)}
+.sub-card .view-hint{position:absolute;bottom:8px;right:8px;font-size:.6rem;
+  color:var(--muted);opacity:0;transition:.2s}
+.sub-card:hover .view-hint{opacity:1}
 </style>
 </head>
 <body>
@@ -301,6 +421,30 @@ textarea.form-input{resize:vertical;min-height:72px}
         </div>
       </div>
 
+      <!-- 实时执行状态面板 -->
+      <div class="panel-card" id="sub-exec-panel" style="display:none;border-color:#a5b4fc">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div class="sec-title" style="margin-bottom:0;color:var(--primary)">⚡ 实时执行状态</div>
+          <!-- 工作流步骤条 -->
+          <div id="wf-steps-inline" style="display:flex;gap:4px;align-items:center">
+            <div class="wf-step" data-step="analyzing">🧠 分析</div>
+            <div class="wf-arrow">→</div>
+            <div class="wf-step" data-step="planned">⚡ 拆解</div>
+            <div class="wf-arrow">→</div>
+            <div class="wf-step" data-step="dispatching">📤 下发</div>
+            <div class="wf-arrow">→</div>
+            <div class="wf-step" data-step="summarizing">📊 汇总</div>
+          </div>
+        </div>
+        <!-- 子角色卡片网格 -->
+        <div id="sub-cards" class="sub-cards-grid"></div>
+        <!-- 操作日志 -->
+        <div style="margin-top:14px">
+          <div style="font-size:.72rem;color:var(--muted);font-weight:600;margin-bottom:6px;letter-spacing:.04em">操作日志</div>
+          <div id="orch-log" class="orch-log"></div>
+        </div>
+      </div>
+
       <!-- 直接分配 -->
       <div class="panel-card">
         <div class="sec-title" style="margin-bottom:18px">直接分配任务</div>
@@ -320,7 +464,51 @@ textarea.form-input{resize:vertical;min-height:72px}
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<!-- ── 角色执行详情抽屉 ── -->
+<div class="drawer-mask" id="drawer-mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="avatar-ring drawer-avatar" style="width:52px;height:52px">
+      <canvas id="drawer-av" width="52" height="52" style="width:52px;height:52px"></canvas>
+    </div>
+    <div class="drawer-title">
+      <div class="drawer-name" id="drawer-name">角色名</div>
+      <div class="drawer-meta" id="drawer-meta">描述信息</div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <!-- 状态行 -->
+    <div class="d-section">
+      <div class="d-section-title">执行状态</div>
+      <div class="d-status-row" id="drawer-status-row">
+        <div class="d-status-dot pending" id="drawer-dot"></div>
+        <div class="d-status-label" id="drawer-status-label">等待中</div>
+        <div class="d-timing" id="drawer-timing"></div>
+      </div>
+    </div>
+    <!-- 子任务描述 -->
+    <div class="d-section">
+      <div class="d-section-title">分配任务</div>
+      <div class="d-task-box" id="drawer-task">—</div>
+    </div>
+    <!-- 实时日志（执行中时显示） -->
+    <div class="d-section" id="drawer-log-section" style="display:none">
+      <div class="d-section-title">实时日志</div>
+      <div class="d-live-log" id="drawer-live-log"></div>
+    </div>
+    <!-- 执行结果 -->
+    <div class="d-section" id="drawer-result-section">
+      <div class="d-section-title">执行结果</div>
+      <div class="d-result-box thinking" id="drawer-result">
+        <div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <span style="font-family:Inter,sans-serif;font-size:.78rem">等待执行…</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/vendor/three.min.js"></script>
 <script>
 // ─── 数据 ───────────────────────────────────────────────────────
 let allRoles=[], allTasks=[];
@@ -532,15 +720,47 @@ function renderTasks(){
     const sc=t.status==='done'?'sp-done':t.status==='failed'?'sp-failed':'sp-running';
     const icon=t.is_orchestrated?'👑':'';
     const time=new Date(t.created_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
-    return `<div class="task-item">
-      <div class="task-item-left">
-        <div class="task-role">${icon}${r?.name||'未知'}</div>
-        <div class="task-msg">${t.message}</div>
+    // 编排任务：显示子角色结果按钮
+    const subBtns=t.is_orchestrated && t.sub_tasks?.length
+      ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px">
+          ${t.sub_tasks.map(st=>`
+            <button class="btn-xs ${st.status==='done'?'btn-assign':st.status==='failed'?'btn-del':'btn-cmd'}"
+              style="font-size:.65rem;padding:3px 8px"
+              onclick="event.stopPropagation();viewSubResult('${t.id}','${st.role_id}','${st.role_name}')">
+              ${getRoleIcon(st.role_name)} ${st.role_name}
+              <span style="opacity:.7">${st.status==='done'?'✓':st.status==='failed'?'✗':'…'}</span>
+            </button>`).join('')}
+        </div>` : '';
+    return `<div class="task-item" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="task-item-left">
+          <div class="task-role">${icon}${r?.name||'未知'} <span style="font-weight:400;color:var(--muted);font-size:.68rem">${t.is_orchestrated?'主控编排':''}</span></div>
+          <div class="task-msg">${t.message}</div>
+        </div>
+        <div class="task-time">${time}</div>
+        <div class="status-pill ${sc}">${t.status==='done'?'完成':t.status==='running'?'执行中':'失败'}</div>
       </div>
-      <div class="task-time">${time}</div>
-      <div class="status-pill ${sc}">${t.status==='done'?'完成':t.status==='running'?'执行中':'失败'}</div>
+      ${subBtns}
     </div>`;
   }).join('');
+}
+
+// 从历史任务查看某角色结果（打开抽屉）
+async function viewSubResult(taskId, roleId, roleName) {
+  // 确保 allTasks 中有这条任务的完整数据
+  let task = allTasks.find(t => t.id === taskId);
+  if (!task || !task.sub_tasks?.length) {
+    try {
+      const r = await fetch(`/tasks/${taskId}`);
+      if (r.ok) {
+        task = await r.json();
+        const idx = allTasks.findIndex(t => t.id === taskId);
+        if (idx >= 0) allTasks[idx] = task; else allTasks.unshift(task);
+      }
+    } catch(e) {}
+  }
+  currentOrchTaskId = taskId;
+  openDrawer(roleId, taskId);
 }
 
 // ─── 交互 ──────────────────────────────────────────────────────
@@ -575,6 +795,290 @@ async function delRole(id){
   toast('🗑 角色已移除'); await loadAll();
 }
 
+// ─── 抽屉状态 ─────────────────────────────────────────────────
+let drawerRoleId = null;
+let drawerTaskId = null;
+let drawerRefreshTimer = null;
+let drawerAvatarRenderer = null;  // 保存 Three.js renderer 引用
+
+function openDrawer(roleId, taskId) {
+  drawerRoleId = roleId;
+  drawerTaskId = taskId;
+  document.getElementById('drawer-mask').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+  refreshDrawer();
+  // 执行中时自动轮询
+  clearInterval(drawerRefreshTimer);
+  drawerRefreshTimer = setInterval(() => {
+    if (drawerRoleId && drawerTaskId) refreshDrawer();
+  }, 2000);
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-mask').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  clearInterval(drawerRefreshTimer);
+  drawerRoleId = null;
+  drawerTaskId = null;
+}
+
+async function refreshDrawer() {
+  if (!drawerRoleId || !drawerTaskId) return;
+
+  // 始终从后端拉最新数据，确保结果完整（尤其 done 状态有完整 result）
+  let st = null;
+  try {
+    const r = await fetch(`/tasks/${drawerTaskId}/sub/${drawerRoleId}`);
+    if (r.ok) st = await r.json();
+  } catch(e) {}
+
+  // 后端没有时 fallback 到内存
+  if (!st) {
+    const taskEl = allTasks.find(t => t.id === drawerTaskId);
+    if (taskEl?.sub_tasks) st = taskEl.sub_tasks.find(s => s.role_id === drawerRoleId);
+  }
+
+  if (!st) return;
+  const role = allRoles.find(r => r.id === drawerRoleId);
+  const roleIdx = allRoles.findIndex(r => r.id === drawerRoleId);
+
+  // 头部信息
+  document.getElementById('drawer-name').textContent = `${getRoleIcon(st.role_name)} ${st.role_name}`;
+  document.getElementById('drawer-meta').textContent = role ? (role.description || `agent: ${role.agent_id}`) : '子角色';
+
+  // 头像（只渲染一次）
+  const cvs = document.getElementById('drawer-av');
+  if (cvs && !cvs._rendered) {
+    cvs._rendered = true;
+    renderAvatar(cvs, role?.is_controller ? '#f59e0b' : COLORS[roleIdx >= 0 ? roleIdx % COLORS.length : 0], role?.is_controller || false);
+  }
+
+  // 状态
+  const dot = document.getElementById('drawer-dot');
+  const label = document.getElementById('drawer-status-label');
+  const timing = document.getElementById('drawer-timing');
+  dot.className = `d-status-dot ${st.status}`;
+  label.textContent = { pending: '⏳ 等待中', running: '⚡ 执行中', done: '✅ 已完成', failed: '❌ 失败' }[st.status] || st.status;
+
+  // 耗时
+  if (st.started_at && st.finished_at) {
+    const s = new Date(st.started_at), e = new Date(st.finished_at);
+    const sec = Math.round((e - s) / 1000);
+    timing.textContent = sec < 60 ? `耗时 ${sec}s` : `耗时 ${Math.floor(sec/60)}m ${sec%60}s`;
+  } else if (st.started_at && st.status === 'running') {
+    const sec = Math.round((Date.now() - new Date(st.started_at)) / 1000);
+    timing.textContent = `已运行 ${sec}s`;
+  } else {
+    timing.textContent = '';
+  }
+
+  // 任务内容
+  document.getElementById('drawer-task').textContent = st.sub_task || '（未分配）';
+
+  // 实时日志区（执行中）
+  const logSec = document.getElementById('drawer-log-section');
+  const liveLog = document.getElementById('drawer-live-log');
+  if (st.status === 'running') {
+    logSec.style.display = 'block';
+    // 追加日志行（避免重复）
+    const ts = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const line = document.createElement('div');
+    line.className = 'd-live-log-line';
+    line.innerHTML = `<span class="d-live-ts">${ts}</span><span style="color:#a5b4fc">⚡ 正在执行...</span>`;
+    liveLog.appendChild(line);
+    liveLog.scrollTop = liveLog.scrollHeight;
+  } else {
+    // 结束后保留日志，加一条结束行
+    if (logSec.style.display !== 'none') {
+      const ts = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const endLine = document.createElement('div');
+      endLine.className = 'd-live-log-line';
+      endLine.innerHTML = `<span class="d-live-ts">${ts}</span><span style="color:${st.status==='done'?'#6ee7b7':'#fca5a5'}">${st.status==='done'?'✅ 执行完成':'❌ 执行失败'}</span>`;
+      liveLog.appendChild(endLine);
+      liveLog.scrollTop = liveLog.scrollHeight;
+    }
+    // 停止轮询
+    clearInterval(drawerRefreshTimer);
+  }
+
+  // 结果区
+  const resBox = document.getElementById('drawer-result');
+  if (st.status === 'pending') {
+    resBox.className = 'd-result-box thinking';
+    resBox.innerHTML = `<div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span style="font-family:Inter,sans-serif;font-size:.78rem;color:var(--muted)">等待执行…</span>`;
+  } else if (st.status === 'running') {
+    resBox.className = 'd-result-box thinking';
+    resBox.innerHTML = `<div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span style="font-family:Inter,sans-serif;font-size:.78rem;color:var(--muted)">正在生成结果，请稍候…</span>`;
+  } else if (st.result) {
+    resBox.className = 'd-result-box';
+    resBox.innerHTML = renderMarkdownLite(st.result);
+  } else {
+    resBox.className = 'd-result-box thinking';
+    resBox.innerHTML = `<span style="font-family:Inter,sans-serif;color:var(--muted)">${st.status==='failed'?'❌ 执行失败，无结果':'（无内容）'}</span>`;
+  }
+}
+
+// 轻量 Markdown 渲染（标题/加粗/代码块/列表）
+function renderMarkdownLite(text) {
+  if (!text) return '';
+  // 转义 HTML
+  let s = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // 代码块
+  s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, '<div style="background:#1e293b;border-radius:6px;padding:10px 12px;margin:8px 0;color:#e2e8f0;font-size:.75rem;overflow-x:auto">$1</div>');
+  // 内联代码
+  s = s.replace(/`([^`]+)`/g, '<code style="background:#1e293b;color:#a5b4fc;padding:1px 5px;border-radius:4px;font-size:.85em">$1</code>');
+  // 标题
+  s = s.replace(/^### (.+)$/gm, '<div style="font-weight:700;color:#a5b4fc;margin:12px 0 4px;font-size:.85rem">$1</div>');
+  s = s.replace(/^## (.+)$/gm, '<div style="font-weight:700;color:#c4b5fd;margin:14px 0 4px;font-size:.9rem;border-bottom:1px solid #1e293b;padding-bottom:4px">$1</div>');
+  s = s.replace(/^# (.+)$/gm, '<div style="font-weight:700;color:#e2e8f0;margin:16px 0 6px;font-size:1rem">$1</div>');
+  // 加粗
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#f1f5f9">$1</strong>');
+  // 列表
+  s = s.replace(/^[-*] (.+)$/gm, '<div style="padding-left:12px;margin:2px 0">· $1</div>');
+  // 换行
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+let currentOrchTaskId=null;
+
+function startOrchSSE(taskId){
+  if(orchSSE){orchSSE.close();}
+  orchSSE=new EventSource('/events');
+  orchSSE.onmessage=e=>{
+    try{
+      const raw=JSON.parse(e.data);
+      // 兼容两种格式：{event, data} 或扁平格式
+      const evName=raw.event||raw.type||'';
+      const d=raw.data||raw;
+      if(evName==='ping'||evName==='connected')return;
+      if(evName==='orchestration_start'){
+        renderSubPanel([], d.target_roles||[]);
+        updateOrchLog(`👑 主控开始编排，目标成员：${(d.target_roles||[]).join('、')}`);
+      } else if(evName==='orchestration_step'){
+        const stepMap={analyzing:'🧠 分析任务',planned:'⚡ 拆解完成',dispatching:'📤 下发各角色',summarizing:'📊 汇总中…'};
+        updateOrchLog(stepMap[d.step]||d.step);
+        updateWfStep(d.step);
+      } else if(evName==='sub_task_update'){
+        updateSubCard(d);
+        if(drawerRoleId===d.role_id)refreshDrawer();
+      } else if(evName==='orchestration_done'){
+        updateOrchLog('🎉 所有角色已完成，主控正在汇总报告…');
+        if(orchSSE){orchSSE.close();orchSSE=null;}
+      }
+    }catch(err){}
+  };
+  orchSSE.onerror=()=>{if(orchSSE){orchSSE.close();orchSSE=null;}};
+}
+
+function renderSubPanel(subTasks, roleNames){
+  const panel=document.getElementById('sub-exec-panel');
+  panel.style.display='block';
+  const grid=document.getElementById('sub-cards');
+  const items=subTasks.length?subTasks:roleNames.map(n=>({role_name:n,status:'pending',sub_task:'',result:''}));
+  grid.innerHTML=items.map(st=>{
+    const key=(st.role_id||st.role_name).replace(/[^a-z0-9]/gi,'_');
+    const clickable=st.role_id?`onclick="openDrawer('${st.role_id}','${currentOrchTaskId||''}')"`:'';
+    return `<div class="sub-card" id="sc-${key}" ${clickable} title="点击查看执行详情">
+      <div class="sc-header">
+        <span class="sc-name">${getRoleIcon(st.role_name)} ${st.role_name}</span>
+        <span class="sc-badge sc-${st.status||'pending'}">${statusLabel(st.status||'pending')}</span>
+      </div>
+      <div class="sc-task">${st.sub_task||'等待分配…'}</div>
+      <div class="sc-result" id="scr-${key}">${
+        st.result?`<div class="sc-result-text">${st.result.slice(0,200)}${st.result.length>200?'…':''}</div>`:
+        '<div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>'
+      }</div>
+      <div class="view-hint">🔍 查看详情</div>
+    </div>`;
+  }).join('');
+}
+
+function updateSubCard(data){
+  const key=(data.role_id||data.role_name||'').replace(/[^a-z0-9]/gi,'_');
+  let card=document.getElementById(`sc-${key}`);
+  if(!card){
+    const grid=document.getElementById('sub-cards');
+    card=document.createElement('div');
+    card.className='sub-card'; card.id=`sc-${key}`;
+    if(data.role_id){
+      card.setAttribute('onclick',`openDrawer('${data.role_id}','${currentOrchTaskId||''}')`);
+      card.title='点击查看执行详情';
+    }
+    card.innerHTML=`
+      <div class="sc-header">
+        <span class="sc-name">${getRoleIcon(data.role_name)} ${data.role_name}</span>
+        <span class="sc-badge sc-${data.status}">${statusLabel(data.status)}</span>
+      </div>
+      <div class="sc-task">${data.sub_task||''}</div>
+      <div class="sc-result" id="scr-${key}">
+        <div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      </div>
+      <div class="view-hint">🔍 查看详情</div>`;
+    grid.appendChild(card);
+    return;
+  }
+  // 补充 onclick（若之前不知道 role_id）
+  if(data.role_id && !card.getAttribute('onclick')){
+    card.setAttribute('onclick',`openDrawer('${data.role_id}','${currentOrchTaskId||''}')`);
+    card.title='点击查看执行详情';
+  }
+  const badge=card.querySelector('.sc-badge');
+  if(badge){badge.className=`sc-badge sc-${data.status}`;badge.textContent=statusLabel(data.status);}
+  if(data.sub_task){const t=card.querySelector('.sc-task');if(t)t.textContent=data.sub_task;}
+  const res=document.getElementById(`scr-${key}`);
+  if(res){
+    if(data.status==='running'){
+      res.innerHTML='<div class="sc-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+    } else if(data.result){
+      res.innerHTML=`<div class="sc-result-text">${data.result.slice(0,300)}${data.result.length>300?'…':''}</div>`;
+    } else if(data.status==='done'){
+      res.innerHTML='<div class="sc-result-text" style="color:var(--success)">✅ 已完成，等待汇总</div>';
+    }
+  }
+  if(data.status==='running'){card.classList.add('sc-active');card.classList.remove('sc-fin');}
+  else if(data.status==='done'){card.classList.remove('sc-active');card.classList.add('sc-fin');}
+}
+
+function updateOrchLog(msg){
+  const log=document.getElementById('orch-log');
+  if(!log)return;
+  const line=document.createElement('div');
+  line.className='orch-log-line';
+  line.innerHTML=`<span class="orch-log-time">${new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>${msg}`;
+  log.appendChild(line);
+  log.scrollTop=log.scrollHeight;
+}
+
+function updateWfStep(step){
+  const steps=['analyzing','planned','dispatching','summarizing','done'];
+  const labels=['分析','拆解','下发','执行','汇总'];
+  const container=document.getElementById('wf-steps-inline');
+  if(!container)return;
+  const idx=steps.indexOf(step);
+  container.querySelectorAll('.wf-step').forEach((el,i)=>{
+    el.classList.toggle('wf-done',i<idx);
+    el.classList.toggle('wf-active',i===idx);
+  });
+}
+
+function getRoleIcon(name){
+  if(!name)return '🤖';
+  if(/产品|PM|product/i.test(name))return '📋';
+  if(/架构|architect/i.test(name))return '🏗️';
+  if(/后端|backend/i.test(name))return '⚙️';
+  if(/前端|frontend/i.test(name))return '🎨';
+  if(/测试|QA/i.test(name))return '🧪';
+  if(/运维|devops/i.test(name))return '🚀';
+  if(/主控|controller/i.test(name))return '👑';
+  if(/设计|design/i.test(name))return '✏️';
+  if(/运营/i.test(name))return '📊';
+  return '🤖';
+}
+
+function statusLabel(s){
+  return {pending:'等待中',running:'执行中',done:'✅ 完成',failed:'❌ 失败'}[s]||s;
+}
+
 async function runOrch(){
   const ctrl=allRoles.find(r=>r.is_controller);
   if(!ctrl){toast('⚠️ 无主控角色');return;}
@@ -582,19 +1086,68 @@ async function runOrch(){
   if(!msg){toast('⚠️ 请输入任务');return;}
   const btn=document.getElementById('orch-btn');
   const rb=document.getElementById('orch-result');
+
   btn.disabled=true; btn.textContent='⏳ 编排中…';
-  rb.style.display='block'; rb.textContent='👑 主控正在分析并拆解任务，并发下发各角色…';
-  const steps=['🧠 分析任务中…','⚡ 拆解子任务…','📤 下发各角色…','⚙️ 并发执行中…','📊 汇总报告…'];
-  let si=0; toast(steps[si]);
-  const t=setInterval(()=>{si=(si+1)%steps.length;toast(steps[si]);},3000);
+  rb.style.display='block';
+  rb.innerHTML='';
+  currentOrchTaskId=null;
+
+  // 初始化面板
+  document.getElementById('sub-exec-panel').style.display='block';
+  document.getElementById('sub-cards').innerHTML='<div style="color:var(--muted);font-size:.82rem">⏳ 等待主控分配任务…</div>';
+  const logEl=document.getElementById('orch-log');
+  if(logEl)logEl.innerHTML='';
+
+  // 初始化工作流步骤
+  const wfEl=document.getElementById('wf-steps-inline');
+  if(wfEl)wfEl.querySelectorAll('.wf-step').forEach(el=>{el.classList.remove('wf-done','wf-active');});
+
+  // 先订阅 SSE，再发请求
+  startOrchSSE(null);
+  updateOrchLog('🚀 开始编排任务：'+msg);
+
   try{
-    const res=await fetch('/orchestrate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({controller_id:ctrl.id,message:msg})});
+    let res;
+    try{
+      res=await fetch('/orchestrate',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({controller_id:ctrl.id,message:msg})});
+    }catch(netErr){
+      throw new Error('网络连接失败，请确认服务已启动（端口 8765）');
+    }
+    if(!res.ok){
+      let errMsg=`HTTP ${res.status}`;
+      try{ const j=await res.json(); errMsg=j.detail||JSON.stringify(j); }catch(_){}
+      throw new Error(errMsg);
+    }
     const task=await res.json();
-    clearInterval(t);
-    rb.innerHTML=`<div style="color:var(--success);font-weight:700;margin-bottom:8px">✅ 编排完成！</div>${task.result||''}`;
-    toast('🎉 编排任务完成！'); await loadAll();
-  }catch(e){clearInterval(t);rb.textContent=`❌ ${e.message}`;}
+    currentOrchTaskId=task.id;
+
+    // 同步到 allTasks 以便抽屉使用
+    const existing=allTasks.findIndex(t=>t.id===task.id);
+    if(existing>=0)allTasks[existing]=task; else allTasks.unshift(task);
+
+    // 用返回的 sub_tasks 刷新卡片（最终状态，含完整 role_id）
+    // 同时修复 SSE 阶段绑定时 taskId 为空的问题
+    if(task.sub_tasks?.length){
+      renderSubPanel(task.sub_tasks,[]);
+      // 确保所有卡片都绑定了正确的 taskId
+      task.sub_tasks.forEach(st=>{
+        const key=st.role_id.replace(/[^a-z0-9]/gi,'_');
+        const card=document.getElementById(`sc-${key}`);
+        if(card) card.setAttribute('onclick',`openDrawer('${st.role_id}','${task.id}')`);
+      });
+    }
+    rb.innerHTML=`
+      <div style="color:var(--success);font-weight:700;margin-bottom:10px;font-size:1rem">🎉 编排完成！</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">👆 点击上方各角色卡片可查看完整执行结果</div>
+      <div style="white-space:pre-wrap;font-size:.82rem;line-height:1.7;color:var(--text2)">${task.result||'（无汇总内容）'}</div>`;
+    updateOrchLog('🎉 编排完成，主控已汇总结果');
+    toast('🎉 编排任务完成！点击角色卡片查看详情');
+    await loadAll();
+  }catch(e){
+    rb.innerHTML=`<div style="color:var(--danger)">❌ ${e.message}</div>`;
+    updateOrchLog('❌ 编排失败：'+e.message);
+  }
   btn.disabled=false; btn.textContent='⚡ 下达指令并编排';
 }
 

@@ -6,6 +6,7 @@ import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from typing import List, Optional
 from pathlib import Path
 
@@ -14,6 +15,11 @@ from team_manager import TeamManager
 
 app = FastAPI(title="AI Team Platform", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# 挂载静态资源目录（vendor JS 等）
+_static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
 manager = TeamManager()
 
 # ─── 角色管理 ────────────────────────────────────────────────────
@@ -56,6 +62,18 @@ def get_task(task_id: str):
     tasks = {t.id: t for t in manager.list_tasks()}
     if task_id not in tasks: raise HTTPException(404, "任务不存在")
     return tasks[task_id]
+
+@app.get("/tasks/{task_id}/sub/{role_id}")
+def get_sub_task(task_id: str, role_id: str):
+    """获取编排任务中某个角色的子任务详情（含完整结果）"""
+    tasks = {t.id: t for t in manager.list_tasks()}
+    if task_id not in tasks:
+        raise HTTPException(404, "任务不存在")
+    task = tasks[task_id]
+    for st in task.sub_tasks:
+        if st.role_id == role_id:
+            return st
+    raise HTTPException(404, "子任务不存在")
 
 @app.post("/roles/{role_id}/tasks", response_model=TeamTask)
 async def send_task(role_id: str, req: SendTaskRequest):
