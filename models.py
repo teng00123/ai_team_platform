@@ -17,6 +17,7 @@ class AgentRole(BaseModel):
     is_controller: bool = False        # 是否为主控角色
     created_at: datetime = Field(default_factory=datetime.now)
     is_active: bool = True
+    session_key: Optional[str] = None  # 持久化 session key（spawn 后保留）
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}

@@ -1,6 +1,7 @@
 """
 AI Team Platform - 团队管理器 + 主控编排器
 核心：通过 OpenClaw Sessions API 真实下发任务给各 subagent
+支持持久化 session：每个角色持有独立长生命周期 session，保留上下文记忆
 """
 import json
 import asyncio
@@ -188,17 +189,161 @@ async def _poll_session_result(session_key: str, timeout: int = 120) -> str:
 
 
 async def _delete_session(session_key: str):
-    """清理子 session"""
+    """清理子 session（保留接口，暂不主动删除持久 session）"""
+    pass
+
+
+async def send_to_persistent_session(session_key: str, message: str, timeout: int = 120) -> str:
+    """
+    向已存在的持久 session 发送消息并等待回复。
+    使用 sessions_send API（需要 gateway.tools.allow 包含 sessions_send）。
+    """
     try:
         headers = _gw_headers()
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
+        async with httpx.AsyncClient(timeout=timeout + 10) as client:
+            resp = await client.post(
                 _gw_url("/tools/invoke"),
-                json={"tool": "sessions_list", "args": {"limit": 1}},  # no-op warmup
+                json={
+                    "tool": "sessions_send",
+                    "args": {
+                        "sessionKey": session_key,
+                        "message": message,
+                        "timeoutSeconds": timeout,
+                    },
+                },
                 headers=headers,
             )
-    except Exception:
-        pass
+            resp.raise_for_status()
+            data = resp.json()
+
+        if not data.get("ok"):
+            print(f"[sessions_send failed] {data}")
+            return ""
+
+        details = data.get("result", {}).get("details", {})
+        status = details.get("status", "")
+        if status == "error":
+            err = details.get("error", "")
+            print(f"[sessions_send error] {err}")
+            return ""
+
+        # sessions_send 同步等待完成后返回，直接从 history 取最新 assistant 消息
+        return await _get_latest_assistant_reply(session_key)
+
+    except Exception as e:
+        print(f"[sessions_send exception] {type(e).__name__}: {e}")
+        return ""
+
+
+async def _get_latest_assistant_reply(session_key: str, retries: int = 3) -> str:
+    """从 session history 取最新的 assistant 回复"""
+    headers = _gw_headers()
+    for attempt in range(retries):
+        await asyncio.sleep(1)
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    _gw_url("/tools/invoke"),
+                    json={"tool": "sessions_history", "args": {"sessionKey": session_key, "limit": 10}},
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            if not data.get("ok"):
+                continue
+
+            import json as _json
+            text_raw = ""
+            for item in data.get("result", {}).get("content", []):
+                if item.get("type") == "text":
+                    text_raw = item.get("text", "")
+                    break
+
+            try:
+                history = _json.loads(text_raw) if isinstance(text_raw, str) else text_raw
+            except Exception:
+                history = {}
+
+            messages = []
+            if isinstance(history, dict):
+                messages = history.get("messages", [])
+            elif isinstance(history, list):
+                messages = history
+
+            assistant_msgs = [m for m in messages if m.get("role") == "assistant"]
+            if assistant_msgs:
+                last = assistant_msgs[-1]
+                content = last.get("content", "")
+                if isinstance(content, list):
+                    content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
+                content_str = str(content).strip()
+                if content_str and len(content_str) > 5:
+                    return content_str
+        except Exception as e:
+            print(f"[get_reply attempt {attempt}] {e}")
+
+    return ""
+
+
+async def spawn_persistent_session(role_name: str, system_prompt: str, timeout: int = 60) -> str:
+    """
+    为角色创建持久 session。
+    spawn 一个带角色身份的 session，等待就绪后返回 session_key。
+    """
+    init_message = (
+        f"{system_prompt}\n\n"
+        f"你的角色是：{role_name}。"
+        f"请简短确认你的身份和职责，回复不超过2句话。"
+    )
+    try:
+        headers = _gw_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                _gw_url("/tools/invoke"),
+                json={
+                    "tool": "sessions_spawn",
+                    "args": {
+                        "task": init_message,
+                        "mode": "run",
+                        "runtime": "subagent",
+                        "cleanup": "keep",
+                    },
+                },
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        details = data.get("result", {}).get("details", {})
+        child_key = details.get("childSessionKey", "")
+        if not child_key:
+            print(f"[spawn_persistent] no childSessionKey for {role_name}")
+            return ""
+
+        print(f"[spawn_persistent] {role_name} → {child_key}")
+        # 等待初始化完成（不阻塞，后台初始化）
+        asyncio.create_task(_wait_session_ready(child_key, timeout))
+        return child_key
+
+    except Exception as e:
+        print(f"[spawn_persistent error] {role_name}: {e}")
+        return ""
+
+
+async def _wait_session_ready(session_key: str, timeout: int = 60):
+    """后台等待 session 初始化完成"""
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        await asyncio.sleep(3)
+        try:
+            reply = await _get_latest_assistant_reply(session_key, retries=1)
+            if reply:
+                print(f"[session_ready] {session_key[:30]}... 已就绪")
+                return
+        except Exception:
+            pass
+    print(f"[session_ready] {session_key[:30]}... 初始化超时")
 
 
 async def call_llm_direct(prompt: str, system: str = "") -> str:
@@ -349,7 +494,8 @@ class TeamManager:
                 return r
         return None
 
-    def add_role(self, req: CreateRoleRequest) -> AgentRole:
+    def add_role_sync(self, req: CreateRoleRequest) -> AgentRole:
+        """同步创建角色（不含 session 初始化，由调用方负责后台触发）"""
         if req.is_controller:
             for r in list(self._roles.values()):
                 if r.is_controller:
@@ -365,6 +511,26 @@ class TeamManager:
         self._save()
         self._emit("role_added", role.model_dump())
         return role
+
+    def add_role(self, req: CreateRoleRequest) -> AgentRole:
+        """兼容旧接口"""
+        return self.add_role_sync(req)
+
+    async def _init_role_session(self, role_id: str):
+        """为角色初始化持久化 session，完成后保存 session_key"""
+        role = self._roles.get(role_id)
+        if not role:
+            return
+        print(f"[init_session] 初始化角色「{role.name}」的持久 session...")
+        system = role.system_prompt or f"你是{role.name}，职责：{role.description or role.name}。"
+        session_key = await spawn_persistent_session(role.name, system)
+        if session_key:
+            self._roles[role_id] = role.model_copy(update={"session_key": session_key})
+            self._save()
+            print(f"[init_session] 「{role.name}」session 已就绪: {session_key[:30]}...")
+            self._emit("role_session_ready", {"role_id": role_id, "role_name": role.name, "session_key": session_key})
+        else:
+            print(f"[init_session] 「{role.name}」session 初始化失败，将使用 spawn 模式")
 
     def delete_role(self, role_id: str) -> bool:
         if role_id not in self._roles:
@@ -536,23 +702,33 @@ class TeamManager:
     async def _call_agent(self, role: AgentRole, prompt: str) -> str:
         """
         优先级：
-        1. OpenClaw sessions/spawn API（真实 subagent）
-        2. 本地 LLM (ollama)
-        3. 规则 fallback
+        1. 持久化 session（若角色已有 session_key）→ sessions_send 保留上下文
+        2. OpenClaw sessions_spawn（新建临时 subagent）
+        3. 本地 LLM (ollama)
+        4. 规则 fallback
         """
         system = role.system_prompt or f"你是{role.name}，职责：{role.description or role.name}。请给出专业详细的分析和建议。"
 
-        # 1. 尝试 OpenClaw Agent
-        result = await call_openclaw_agent(prompt, agent_id=role.agent_id, system_prompt=system)
+        # 1. 优先使用持久化 session（保留角色记忆和上下文）
+        if role.session_key:
+            print(f"[call_agent] {role.name} → 使用持久 session {role.session_key[:25]}...")
+            result = await send_to_persistent_session(role.session_key, prompt, timeout=120)
+            if result and len(result.strip()) > 10:
+                return result
+            print(f"[call_agent] {role.name} 持久 session 无响应，降级到 spawn")
+
+        # 2. 新建 subagent（无持久 session 或 session 失效时）
+        full_prompt = f"{system}\n\n{prompt}"
+        result = await call_openclaw_agent(full_prompt, agent_id=role.agent_id)
         if result and len(result.strip()) > 10:
             return result
 
-        # 2. 尝试本地 LLM
+        # 3. 本地 LLM
         result = await call_llm_direct(prompt, system=system)
         if result and len(result.strip()) > 10:
             return result
 
-        # 3. 规则 fallback
+        # 4. 规则 fallback
         await asyncio.sleep(0.3)
         return rule_based_response(role, prompt)
 

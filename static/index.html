@@ -687,6 +687,12 @@ function renderRoles(){
       </div>
       <div class="role-name">${icon} ${r.name}</div>
       <div class="role-tag">agent: ${r.agent_id}</div>
+      <div style="margin-bottom:6px">
+        ${r.session_key
+          ? `<span style="font-size:.64rem;background:#d1fae5;color:#059669;padding:2px 7px;border-radius:999px;font-weight:600">⚡ 持久Session</span>`
+          : `<span style="font-size:.64rem;background:#f1f5f9;color:var(--muted);padding:2px 7px;border-radius:999px;font-weight:500" title="点击刷新">○ 初始化中…</span>`
+        }
+      </div>
       <div class="role-desc">${r.description||'暂无描述'}</div>
       <div class="role-actions">
         ${ic

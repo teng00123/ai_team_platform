@@ -3,7 +3,7 @@ AI Team Platform - FastAPI 服务（含 SSE 实时推送 + 主控编排 API）
 """
 import asyncio
 import json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,8 +29,10 @@ def list_roles():
     return manager.list_roles()
 
 @app.post("/roles", response_model=AgentRole)
-def create_role(req: CreateRoleRequest):
-    return manager.add_role(req)
+async def create_role(req: CreateRoleRequest, background_tasks: "BackgroundTasks"):
+    role = manager.add_role_sync(req)  # 同步创建，不含 session
+    background_tasks.add_task(manager._init_role_session, role.id)
+    return role
 
 @app.get("/roles/{role_id}", response_model=AgentRole)
 def get_role(role_id: str):
@@ -46,8 +48,16 @@ def update_role(role_id: str, req: CreateRoleRequest):
     if not r: raise HTTPException(404, "角色不存在")
     return r
 
-@app.delete("/roles/{role_id}")
-def delete_role(role_id: str):
+@app.post("/roles/{role_id}/init-session", summary="初始化/重置角色持久 session")
+async def init_role_session(role_id: str):
+    """手动触发为角色创建新的持久化 session"""
+    r = manager.get_role(role_id)
+    if not r:
+        raise HTTPException(404, "角色不存在")
+    asyncio.create_task(manager._init_role_session(role_id))
+    return {"ok": True, "message": f"正在为「{r.name}」初始化持久 session，约需10-15秒"}
+
+
     if not manager.delete_role(role_id): raise HTTPException(404, "角色不存在")
     return {"ok": True}
 
