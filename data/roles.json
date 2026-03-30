@@ -8,7 +8,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 11:14:29.223505",
     "is_active": true,
-    "session_key": "agent:main:subagent:0c5007c1-50c9-40b4-a510-b75ff4cc42f5"
+    "session_key": null
   },
   "e303c082-958a-415e-9b00-8db60e5c1631": {
     "id": "e303c082-958a-415e-9b00-8db60e5c1631",
@@ -19,7 +19,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 11:14:47.867538",
     "is_active": true,
-    "session_key": "agent:main:subagent:1942ec93-8f1e-4e81-a8fb-834e5b7f44c0"
+    "session_key": null
   },
   "9f65d179-e74c-4a98-9c1f-62d63c75ba77": {
     "id": "9f65d179-e74c-4a98-9c1f-62d63c75ba77",
@@ -30,7 +30,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 11:15:04.798130",
     "is_active": true,
-    "session_key": "agent:main:subagent:6f5160a1-2ca6-4856-ba2b-354b8eebecf8"
+    "session_key": null
   },
   "d0288204-500c-4c27-a243-94a7808a9bc5": {
     "id": "d0288204-500c-4c27-a243-94a7808a9bc5",
@@ -41,7 +41,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 11:15:21.957391",
     "is_active": true,
-    "session_key": "agent:main:subagent:8157c7ab-4528-4122-b0da-9dac3e08fbf3"
+    "session_key": null
   },
   "0f96d67b-1cd8-4c83-8efb-22b98879b331": {
     "id": "0f96d67b-1cd8-4c83-8efb-22b98879b331",
@@ -52,7 +52,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 11:17:07.284417",
     "is_active": true,
-    "session_key": "agent:main:subagent:18531c33-f29b-4c0b-a393-6722da1bf6c4"
+    "session_key": null
   },
   "9d28ab2b-17ea-40ee-857f-95c2d32cee44": {
     "id": "9d28ab2b-17ea-40ee-857f-95c2d32cee44",
@@ -63,7 +63,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 11:17:24.345821",
     "is_active": true,
-    "session_key": "agent:main:subagent:4a9811a2-a6ec-4f70-be55-88c15215856a"
+    "session_key": null
   },
   "40b8c854-dfa8-49f7-904b-9ad8d940458c": {
     "id": "40b8c854-dfa8-49f7-904b-9ad8d940458c",
@@ -74,7 +74,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 11:18:14.464791",
     "is_active": true,
-    "session_key": "agent:main:subagent:2471d3f4-1ec1-4261-8c66-4a9ce8d0f327"
+    "session_key": null
   },
   "91922858-1cb3-43bb-b5d5-dd742ac01670": {
     "id": "91922858-1cb3-43bb-b5d5-dd742ac01670",
@@ -85,7 +85,7 @@
     "is_controller": true,
     "created_at": "2026-03-30 11:19:32.556410",
     "is_active": true,
-    "session_key": "agent:main:subagent:1a269c26-3e79-41b3-b156-0df917260aff"
+    "session_key": null
   },
   "114a2d70-616c-4388-95f2-03e98f510cd8": {
     "id": "114a2d70-616c-4388-95f2-03e98f510cd8",
@@ -96,7 +96,7 @@
     "is_controller": false,
     "created_at": "2026-03-30 15:23:53.557124",
     "is_active": true,
-    "session_key": "agent:main:subagent:cc10c04c-16c3-4d3d-83b2-139c4664a768"
+    "session_key": null
   },
   "e72b0e32-7cbc-43f0-984d-5377937ed928": {
     "id": "e72b0e32-7cbc-43f0-984d-5377937ed928",
@@ -107,6 +107,6 @@
     "is_controller": false,
     "created_at": "2026-03-30 15:25:08.061005",
     "is_active": true,
-    "session_key": "agent:main:subagent:ab745a5e-4912-48e0-91de-1f68d63fbfc3"
+    "session_key": null
   }
 }

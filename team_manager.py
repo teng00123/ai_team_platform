@@ -726,10 +726,21 @@ class TeamManager:
         # 1. 优先使用持久化 session（保留角色记忆和上下文）
         if role.session_key:
             print(f"[call_agent] {role.name} → 使用持久 session {role.session_key[:25]}...")
-            result = await send_to_persistent_session(role.session_key, prompt, timeout=120)
+            try:
+                result = await asyncio.wait_for(
+                    send_to_persistent_session(role.session_key, prompt, timeout=30),
+                    timeout=35,
+                )
+            except (asyncio.TimeoutError, Exception) as e:
+                print(f"[call_agent] {role.name} 持久 session 超时/异常: {e}，清除并降级到 spawn")
+                result = ""
             if result and len(result.strip()) > 10:
                 return result
-            print(f"[call_agent] {role.name} 持久 session 无响应，降级到 spawn")
+            # 持久 session 失效，清除 session_key 避免下次继续卡
+            print(f"[call_agent] {role.name} 持久 session 无响应，清除 session_key 并降级到 spawn")
+            if role.id in self._roles:
+                self._roles[role.id] = role.model_copy(update={"session_key": None})
+                self._save()
 
         # 2. 新建 subagent（无持久 session 或 session 失效时）
         full_prompt = f"{system}\n\n{prompt}"

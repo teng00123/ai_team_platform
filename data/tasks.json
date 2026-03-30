@@ -79,15 +79,15 @@
     "role_id": "91922858-1cb3-43bb-b5d5-dd742ac01670",
     "message": "开发一个 Todo 应用",
     "created_at": "2026-03-30 11:28:22.715388",
-    "status": "running",
-    "result": null,
+    "status": "failed",
+    "result": "⚠️ 服务重启前的卡死任务，已自动标记为失败。请重新下达指令。",
     "is_orchestrated": true,
     "sub_tasks": [
       {
         "role_id": "0f848369-0fc2-4928-ac80-08f47e13567b",
         "role_name": "产品经理",
         "sub_task": "你是产品经理，职责：产品经理。\n从产品经理角度，输出 PRD 草稿（功能清单、用户故事、验收标准）：\n\n开发一个 Todo 应用",
-        "status": "running",
+        "status": "failed",
         "result": null,
         "started_at": "2026-03-30 11:30:26.813243",
         "finished_at": null
