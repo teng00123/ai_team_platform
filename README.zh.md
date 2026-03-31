@@ -26,9 +26,18 @@
 
 ## 🖥️ 界面预览
 
-![AI Team Platform 界面预览](docs/preview.png)
+### 主界面
+![AI Team Platform 主界面](docs/preview.png)
 
-> 多角色团队管理 + 主控编排面板 + 实时任务历史
+### 3D 指挥中心
+![AI Team Platform 3D指挥中心](docs/ai_team_command_center.png)
+
+> 实时 3D 可视化所有 Agent 状态与通信链路。
+
+### 任务执行结果
+![AI Team Platform 任务结果抽屉](docs/ai_team_task_result.png)
+
+> 各角色子任务结果抽屉，支持完整 Markdown 渲染。
 
 ---
 

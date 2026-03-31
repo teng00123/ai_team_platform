@@ -27,9 +27,18 @@ English | [中文](./README.zh.md)
 
 ## 🖥️ Preview
 
-![AI Team Platform UI](docs/preview.png)
+### Main Dashboard
+![AI Team Platform – Main Dashboard](docs/preview.png)
 
-> Multi-role team panel · Controller orchestration · Real-time task history
+### 3D Command Center
+![AI Team Platform – 3D Command Center](docs/ai_team_command_center.png)
+
+> Real-time 3D visualization of all agents, their states, and communication links.
+
+### Task Execution Result
+![AI Team Platform – Task Result Drawer](docs/ai_team_task_result.png)
+
+> Per-role sub-task result viewer with full Markdown output.
 
 ---
 
@@ -47,6 +56,9 @@ English | [中文](./README.zh.md)
 git clone https://github.com/teng00123/ai_team_platform.git
 cd ai_team_platform
 pip install -r requirements.txt
+
+# For development (tests, linting, type checking)
+pip install -r requirements-dev.txt
 ```
 
 ### Initialize data directory
@@ -65,8 +77,15 @@ python main.py
 
 Open **http://localhost:8765** in your browser.
 
+| URL | Description |
+|-----|-------------|
+| `http://localhost:8765` | Main dashboard |
+| `http://localhost:8765/scene` | 3D Command Center |
+| `http://localhost:8765/docs` | Swagger UI (interactive API docs) |
+| `http://localhost:8765/redoc` | ReDoc (alternative API docs) |
+| `http://localhost:8765/health` | Health check endpoint |
+
 > 📝 Logs are written to `/tmp/ai_team.log`
-> 📖 API docs available at **http://localhost:8765/docs**
 
 ---
 

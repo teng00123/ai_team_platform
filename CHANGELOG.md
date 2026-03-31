@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Dockerfile` (multi-stage, non-root user, HEALTHCHECK)
 - `docker-compose.yml` with volume mount, env vars, and host-gateway support
 - API docs available at `/docs` (Swagger UI) and `/redoc`
+- Updated `docs/preview.png` to latest UI screenshot
+- Added `docs/ai_team_command_center.png` and `docs/ai_team_task_result.png` to README
+- README now shows all endpoint URLs (dashboard, 3D scene, docs, health)
+- `requirements-dev.txt` for dev dependencies (pytest, pytest-asyncio, httpx)
 
 ---
 
