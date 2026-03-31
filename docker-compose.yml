@@ -1,0 +1,26 @@
+services:
+  ai-team-platform:
+    build: .
+    container_name: ai_team_platform
+    ports:
+      - "8765:8765"
+    environment:
+      # OpenClaw Gateway connection
+      - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-23001}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      # Optional: local LLM fallback
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      - LLM_API_KEY=${LLM_API_KEY:-ollama}
+    volumes:
+      # Persist runtime data (roles, tasks) outside the container
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Allow container to reach host services (OpenClaw Gateway, local LLM)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

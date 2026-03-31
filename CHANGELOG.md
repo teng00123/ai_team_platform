@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `GET /health` endpoint returning status, version, uptime, role/task counts
+- `Dockerfile` (multi-stage, non-root user, HEALTHCHECK)
+- `docker-compose.yml` with volume mount, env vars, and host-gateway support
+- API docs available at `/docs` (Swagger UI) and `/redoc`
+
 ---
 
 ## [v1.0.0] - 2026-03-31

@@ -3,9 +3,10 @@ AI Team Platform - FastAPI 服务（含 SSE 实时推送 + 主控编排 API）
 """
 import asyncio
 import json
+import time
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from typing import List, Optional
 from pathlib import Path
@@ -13,7 +14,15 @@ from pathlib import Path
 from models import AgentRole, TeamTask, CreateRoleRequest, SendTaskRequest, OrchestrationRequest
 from team_manager import TeamManager
 
-app = FastAPI(title="AI Team Platform", version="2.0.0")
+_START_TIME = time.time()
+
+app = FastAPI(
+    title="AI Team Platform",
+    version="1.0.0",
+    description="A multi-agent collaboration platform powered by OpenClaw",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # 挂载静态资源目录（vendor JS 等）
@@ -21,6 +30,19 @@ _static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 manager = TeamManager()
+
+# ─── Health Check ────────────────────────────────────────────────
+
+@app.get("/health", tags=["System"], summary="Health check")
+def health():
+    """Returns service status, version, and uptime. Used by CI and load balancers."""
+    return JSONResponse({
+        "status": "ok",
+        "version": app.version,
+        "uptime_seconds": round(time.time() - _START_TIME, 1),
+        "roles": len(manager.list_roles()),
+        "tasks": len(manager.list_tasks()),
+    })
 
 # ─── 角色管理 ────────────────────────────────────────────────────
 

@@ -66,6 +66,29 @@ python main.py
 Open **http://localhost:8765** in your browser.
 
 > 📝 Logs are written to `/tmp/ai_team.log`
+> 📖 API docs available at **http://localhost:8765/docs**
+
+---
+
+### Run with Docker
+
+```bash
+# Build and start
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
+
+Set environment variables in a `.env` file alongside `docker-compose.yml`:
+
+```env
+OPENCLAW_GATEWAY_PORT=23001
+OPENCLAW_GATEWAY_TOKEN=your_token_here
+```
 
 ---
 
