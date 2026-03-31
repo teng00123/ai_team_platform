@@ -90,7 +90,7 @@ jobs:
       - name: Init data files
         run: |
           mkdir -p data
-          echo "[]" > data/roles.json
+          echo "{}" > data/roles.json
           echo "{}" > data/tasks.json
 
       - name: Start server and health check
