@@ -1,0 +1,43 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    paths:
+      - 'requirements.txt'
+
+jobs:
+  dependency-check:
+    name: Check Dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit dependencies for known vulnerabilities
+        run: |
+          pip-audit -r requirements.txt --format markdown | tee /tmp/audit.md
+          echo "✅ Dependency audit complete"
+
+      - name: Check for pinned versions
+        run: |
+          echo "Checking all deps are pinned..."
+          python3 -c "
+          import sys
+          with open('requirements.txt') as f:
+              lines = [l.strip() for l in f if l.strip() and not l.startswith('#')]
+          unpinned = [l for l in lines if '==' not in l]
+          if unpinned:
+              print('⚠️  Unpinned dependencies:')
+              for u in unpinned:
+                  print(f'  - {u}')
+          else:
+              print('✅ All dependencies are pinned')
+          "

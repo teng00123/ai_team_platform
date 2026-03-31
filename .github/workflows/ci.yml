@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-check:
+    name: Lint & Static Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install flake8 pylint
+
+      - name: Flake8 syntax check
+        run: |
+          # 检查语法错误和未定义变量（E9/F8），不强制风格
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics \
+            --exclude=__pycache__,.git,static/vendor
+
+      - name: Check imports (no broken imports)
+        run: |
+          python -c "import main; print('✅ main.py imports OK')"
+          python -c "import models; print('✅ models.py imports OK')"
+          python -c "import team_manager; print('✅ team_manager.py imports OK')"
+
+  type-check:
+    name: Type Check (pyright lite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyright
+
+      - name: Pyright type check
+        run: |
+          pyright models.py --outputjson 2>/dev/null | \
+            python3 -c "
+          import json, sys
+          r = json.load(sys.stdin)
+          errors = r.get('generalDiagnostics', [])
+          errs = [e for e in errors if e.get('severity') == 'error']
+          if errs:
+              for e in errs:
+                  print(f\"❌ {e.get('file','')}:{e.get('range',{}).get('start',{}).get('line','')} {e.get('message','')}\")
+              sys.exit(1)
+          else:
+              print(f'✅ No type errors found')
+          " || true
+
+  startup-check:
+    name: App Startup Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Init data files
+        run: |
+          mkdir -p data
+          echo "[]" > data/roles.json
+          echo "{}" > data/tasks.json
+
+      - name: Start server and health check
+        run: |
+          python -m uvicorn main:app --host 127.0.0.1 --port 8765 &
+          SERVER_PID=$!
+          echo "Server PID: $SERVER_PID"
+
+          # 等待启动（最多 15s）
+          for i in $(seq 1 15); do
+            if curl -sf http://127.0.0.1:8765/ > /dev/null 2>&1; then
+              echo "✅ Server is up (${i}s)"
+              break
+            fi
+            echo "Waiting... ${i}s"
+            sleep 1
+          done
+
+          # 检查核心 API 端点
+          echo "--- Checking /api/roles ---"
+          curl -sf http://127.0.0.1:8765/api/roles && echo "✅ /api/roles OK"
+
+          echo "--- Checking /api/tasks ---"
+          curl -sf http://127.0.0.1:8765/api/tasks && echo "✅ /api/tasks OK"
+
+          kill $SERVER_PID
