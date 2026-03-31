@@ -49,6 +49,9 @@ class TeamTask(BaseModel):
     is_orchestrated: bool = False      # 是否为主控编排任务
     sub_tasks: List[SubTaskResult] = Field(default_factory=list)
     orchestration_plan: Optional[str] = None  # 主控的拆解方案
+    # 代码生成结果
+    generated_path: Optional[str] = None      # 生成的项目路径
+    generated_files: List[str] = Field(default_factory=list)  # 生成的文件列表
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
@@ -71,3 +74,4 @@ class OrchestrationRequest(BaseModel):
     controller_id: str                 # 主控角色 id
     message: str                       # 总任务
     target_role_ids: Optional[List[str]] = None  # 指定下发给哪些角色（空=自动选）
+    generate_code: bool = False        # 是否在编排完成后生成代码/文件

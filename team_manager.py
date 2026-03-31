@@ -593,6 +593,7 @@ class TeamManager:
         controller_id: str,
         message: str,
         target_role_ids: Optional[List[str]] = None,
+        generate_code: bool = False,
     ) -> TeamTask:
         """
         立即创建任务并返回，后台启动 asyncio.create_task 异步执行全流程。
@@ -623,7 +624,7 @@ class TeamManager:
 
         # 后台跑，立即返回
         asyncio.create_task(
-            self._orchestrate_background(task.id, controller, target_roles, message)
+            self._orchestrate_background(task.id, controller, target_roles, message, generate_code)
         )
         return task
 
@@ -633,6 +634,7 @@ class TeamManager:
         controller,
         target_roles,
         message: str,
+        generate_code: bool = False,
     ):
         """真正的编排逻辑，在后台 task 中执行，通过 SSE 推送进度"""
         task = self._tasks[task_id]
@@ -726,6 +728,10 @@ class TeamManager:
                 "task_id": task_id, "status": "done",
                 "result": summary[:500] if summary else "",
             })
+
+            # Step 5: 代码生成（可选）
+            if generate_code:
+                await self._generate_code(task_id, message, sub_results, summary)
 
         except Exception as e:
             print(f"[orchestrate_background] error: {e}")
@@ -966,3 +972,113 @@ class TeamManager:
         if failed:
             summary += f"---\n⚠️ 执行失败：{', '.join(sr.role_name for sr in failed)}"
         return summary
+
+    async def _generate_code(
+        self,
+        task_id: str,
+        message: str,
+        sub_results: List[SubTaskResult],
+        summary: str,
+    ):
+        """根据编排结果，调用 subagent 真正生成代码/文件落盘"""
+        import os, re
+
+        self._emit("orchestration_step", {"task_id": task_id, "step": "generating_code"})
+        self._emit("sub_task_update", {
+            "task_id": task_id, "role_id": "codegen", "role_name": "代码生成器",
+            "status": "running", "index": 0, "total": 1,
+            "sub_task": "根据方案生成完整项目代码",
+        })
+
+        # 准备输出目录
+        safe_name = re.sub(r'[^\w\-]', '_', message[:30]).strip('_')
+        out_dir = Path(__file__).parent.parent / "generated" / f"{safe_name}_{task_id[:8]}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # 构建代码生成 prompt
+        done_parts = "\n\n".join([
+            f"## {sr.role_name} 的方案\n{sr.result or ''}"
+            for sr in sub_results if sr.status == "done"
+        ])
+        codegen_prompt = f"""你是一名全栈工程师，需要根据团队方案生成完整可运行的项目代码。
+
+## 原始任务
+{message}
+
+## 团队方案
+{done_parts[:8000]}
+
+## 要求
+1. 生成完整可运行的项目代码（不要省略，不要用占位符）
+2. 按以下格式输出每个文件，严格遵守格式：
+
+===FILE: 文件路径===
+文件内容
+===END===
+
+3. 至少包含：
+   - README.md（项目说明、安装、运行步骤）
+   - 完整的核心代码文件
+   - 依赖配置文件（package.json / requirements.txt 等）
+4. 代码必须真实可运行，不得有 TODO 占位
+5. 每个文件用 ===FILE: path=== 和 ===END=== 包裹，路径相对于项目根目录
+"""
+        try:
+            raw = await call_openclaw_agent(codegen_prompt)
+            if not raw or len(raw.strip()) < 100:
+                raw = await call_llm_direct(codegen_prompt)
+
+            # 解析文件块
+            file_pattern = re.compile(
+                r'===FILE:\s*(.+?)===\s*\n(.*?)===END===',
+                re.DOTALL
+            )
+            matches = file_pattern.findall(raw or "")
+
+            written_files = []
+            if matches:
+                for rel_path, content in matches:
+                    rel_path = rel_path.strip()
+                    if not rel_path:
+                        continue
+                    # 防止路径穿越
+                    target = (out_dir / rel_path).resolve()
+                    if not str(target).startswith(str(out_dir.resolve())):
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(content.strip(), encoding="utf-8")
+                    written_files.append(rel_path)
+            else:
+                # fallback：整体写为 README.md + raw output
+                (out_dir / "README.md").write_text(f"# {message}\n\n{summary}\n", encoding="utf-8")
+                (out_dir / "team_output.md").write_text(raw or "（无内容）", encoding="utf-8")
+                written_files = ["README.md", "team_output.md"]
+
+            # 更新任务记录
+            task = self._tasks.get(task_id)
+            if task:
+                task.generated_path = str(out_dir)
+                task.generated_files = written_files
+                self._tasks[task_id] = task
+                self._save()
+
+            self._emit("code_generated", {
+                "task_id": task_id,
+                "path": str(out_dir),
+                "files": written_files,
+                "file_count": len(written_files),
+            })
+            self._emit("sub_task_update", {
+                "task_id": task_id, "role_id": "codegen", "role_name": "代码生成器",
+                "status": "done", "index": 0, "total": 1,
+                "result": f"生成 {len(written_files)} 个文件 → {out_dir.name}",
+                "elapsed": 0,
+            })
+
+        except Exception as e:
+            print(f"[_generate_code] error: {e}")
+            self._emit("sub_task_update", {
+                "task_id": task_id, "role_id": "codegen", "role_name": "代码生成器",
+                "status": "failed", "index": 0, "total": 1,
+                "result": f"生成失败: {e}", "elapsed": 0,
+            })

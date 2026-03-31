@@ -57,7 +57,8 @@ async def init_role_session(role_id: str):
     asyncio.create_task(manager._init_role_session(role_id))
     return {"ok": True, "message": f"正在为「{r.name}」初始化持久 session，约需10-15秒"}
 
-
+@app.delete("/roles/{role_id}", summary="删除角色")
+def delete_role(role_id: str):
     if not manager.delete_role(role_id): raise HTTPException(404, "角色不存在")
     return {"ok": True}
 
@@ -105,6 +106,7 @@ async def orchestrate(req: OrchestrationRequest):
             controller_id=req.controller_id,
             message=req.message,
             target_role_ids=req.target_role_ids,
+            generate_code=req.generate_code,
         )
         return {"ok": True, "task_id": task.id, "status": task.status, "message": task.message}
     except ValueError as e:

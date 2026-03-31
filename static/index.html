@@ -446,6 +446,12 @@ textarea.form-input{resize:vertical;min-height:72px}
           </div>
           <label class="form-label">下达总任务</label>
           <textarea class="form-input" id="orch-msg" rows="3" placeholder="例：设计一款 AI 助手产品…"></textarea>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--text2);cursor:pointer;user-select:none">
+              <input type="checkbox" id="gen-code-toggle" style="accent-color:var(--primary);width:15px;height:15px">
+              <span>🗂 编排完成后生成项目代码</span>
+            </label>
+          </div>
           <button class="btn-primary btn-gold" id="orch-btn" onclick="runOrch()">⚡ 下达指令并编排</button>
           <div class="result-box" id="orch-result"></div>
         </div>
@@ -873,9 +879,18 @@ function renderTasks(){
     const sc=t.status==='done'?'sp-done':t.status==='failed'?'sp-failed':'sp-running';
     const icon=t.is_orchestrated?'👑':'';
     const time=new Date(t.created_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
-    // 编排任务：显示子角色结果按钮
+    // 编排任务：显示子角色结果按钮 + 汇总报告入口
+    // 代码写入路径提示块
+    const pathBlock = t.generated_path
+      ? `<div style="margin-top:7px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+           <span style="font-size:.7rem;color:#16a34a;font-weight:600">📁 代码已写入</span>
+           <code style="font-size:.68rem;color:#166534;word-break:break-all;flex:1">${t.generated_path}</code>
+           <span style="font-size:.68rem;color:#15803d;white-space:nowrap">${(t.generated_files||[]).length} 个文件</span>
+         </div>` : '';
     const subBtns=t.is_orchestrated && t.sub_tasks?.length
       ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px">
+          ${t.result?`<button class="btn-xs btn-cmd" style="font-size:.65rem;padding:3px 10px;background:linear-gradient(135deg,#4f6ef7,#7c3aed);color:#fff;border:none"
+            onclick="event.stopPropagation();showTaskSummary('${t.id}')">📋 查看汇总报告</button>`:''}
           ${t.sub_tasks.map(st=>`
             <button class="btn-xs ${st.status==='done'?'btn-assign':st.status==='failed'?'btn-del':'btn-cmd'}"
               style="font-size:.65rem;padding:3px 8px"
@@ -893,6 +908,7 @@ function renderTasks(){
         <div class="task-time">${time}</div>
         <div class="status-pill ${sc}">${t.status==='done'?'完成':t.status==='running'?'执行中':'失败'}</div>
       </div>
+      ${pathBlock}
       ${subBtns}
     </div>`;
   }).join('');
@@ -914,6 +930,64 @@ async function viewSubResult(taskId, roleId, roleName) {
   }
   currentOrchTaskId = taskId;
   openDrawer(roleId, taskId);
+}
+
+async function showTaskSummary(taskId) {
+  let task = allTasks.find(t => t.id === taskId);
+  if (!task) {
+    try {
+      const r = await fetch(`/tasks/${taskId}`);
+      if (r.ok) task = await r.json();
+    } catch(e) {}
+  }
+  if (!task) { toast('⚠️ 找不到任务数据'); return; }
+
+  // 复用 drawer 展示汇总报告
+  const mask = document.getElementById('drawer-mask');
+  const drawer = document.getElementById('drawer');
+  mask.classList.add('open');
+  drawer.classList.add('open');
+  clearInterval(drawerRefreshTimer);
+
+  const time = new Date(task.created_at).toLocaleString('zh-CN');
+  const subCount = task.sub_tasks?.length || 0;
+  const doneCount = task.sub_tasks?.filter(s=>s.status==='done').length || 0;
+
+  drawer.innerHTML = `
+    <div style="padding:24px 28px;height:100%;overflow-y:auto;box-sizing:border-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div>
+          <div style="font-size:1.1rem;font-weight:700;color:var(--text)">📋 编排汇总报告</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:4px">${time} · ${doneCount}/${subCount} 角色完成</div>
+        </div>
+        <button onclick="document.getElementById('drawer-mask').classList.remove('open');document.getElementById('drawer').classList.remove('open')"
+          style="background:none;border:1px solid var(--border);border-radius:6px;padding:6px 12px;cursor:pointer;color:var(--muted);font-size:.8rem">✕ 关闭</button>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px">
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">任务指令</div>
+        <div style="font-size:.88rem;color:var(--text);font-weight:500">${task.message}</div>
+      </div>
+      ${task.generated_path ? `
+      <div style="padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:.72rem;font-weight:600;color:#16a34a;white-space:nowrap">📁 代码已写入</span>
+        <code style="font-size:.7rem;color:#166534;word-break:break-all;flex:1">${task.generated_path}</code>
+        <span style="font-size:.7rem;color:#15803d;white-space:nowrap">${(task.generated_files||[]).length} 个文件</span>
+      </div>` : ''}
+      <div style="background:#f8faff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;font-size:.82rem;line-height:1.8;color:var(--text2);white-space:pre-wrap">
+        ${task.result ? renderMarkdownLite(task.result) : '<span style="color:var(--muted)">（主控未生成汇总，请点击各角色按钮查看详情）</span>'}
+      </div>
+      ${subCount ? `
+      <div style="margin-top:16px">
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">各角色结果 · 点击查看详情</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${task.sub_tasks.map(st=>`
+            <button onclick="document.getElementById('drawer-mask').classList.remove('open');document.getElementById('drawer').classList.remove('open');setTimeout(()=>viewSubResult('${task.id}','${st.role_id}','${st.role_name}'),100)"
+              style="font-size:.72rem;padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:${st.status==='done'?'#f0fdf4':'#fff'};color:${st.status==='done'?'#16a34a':st.status==='failed'?'#dc2626':'var(--muted)'};cursor:pointer">
+              ${getRoleIcon(st.role_name)} ${st.role_name} ${st.status==='done'?'✓':st.status==='failed'?'✗':'…'}
+            </button>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>`;
 }
 
 // ─── 交互 ──────────────────────────────────────────────────────
@@ -964,7 +1038,7 @@ function openDrawer(roleId, taskId) {
   clearInterval(drawerRefreshTimer);
   drawerRefreshTimer = setInterval(() => {
     if (drawerRoleId && drawerTaskId) refreshDrawer();
-  }, 2000);
+  }, 500);
 }
 
 function closeDrawer() {
@@ -1138,7 +1212,32 @@ function startOrchSSE(taskId){
         stopAllCardTimers();
         clearInterval(orchState.timerHandle);
         updateOrchBanner();
+        // 立刻刷新任务列表
+        setTimeout(()=>loadAll(), 500);
+        // 如果开了代码生成，保持 SSE 连接等 code_generated 事件
+        if(!document.getElementById('gen-code-toggle')?.checked){
+          if(orchSSE){orchSSE.close();orchSSE=null;}
+        } else {
+          updateOrchLog('🗂 代码生成中，请稍候…');
+        }
+      } else if(evName==='code_generated'){
+        const d=data;
+        updateOrchLog(`✅ 代码生成完成！${d.file_count} 个文件`);
         if(orchSSE){orchSSE.close();orchSSE=null;}
+        setTimeout(()=>loadAll(), 300);
+        // 在编排结果区展示文件入口
+        const rb=document.getElementById('orch-result');
+        if(rb){
+          rb.innerHTML+= `
+            <div style="margin-top:12px;padding:12px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px">
+              <div style="font-weight:600;color:#16a34a;margin-bottom:6px">🗂 项目代码已生成 · ${d.file_count} 个文件</div>
+              <div style="font-size:.75rem;color:#166534;margin-bottom:8px;word-break:break-all">📁 ${d.path}</div>
+              <div style="font-size:.72rem;color:#15803d;line-height:1.8">
+                ${(d.files||[]).map(f=>`<span style="display:inline-block;margin-right:8px">📄 ${f}</span>`).join('')}
+              </div>
+            </div>`;
+        }
+        toast(`🗂 代码已生成！${d.file_count} 个文件 → ${(d.path||'').split('/').pop()}`);
       }
     }catch(err){}
   };
@@ -1298,12 +1397,13 @@ async function runOrch(){
   if(wfEl)wfEl.querySelectorAll('.wf-step').forEach(el=>{el.classList.remove('wf-done','wf-active');});
 
   // ── 发请求（非阻塞，后端立刻返回 task_id）──────────────────────
+  const genCode = document.getElementById('gen-code-toggle')?.checked || false;
   let taskId = null;
   try{
     let res;
     try{
       res=await fetch('/orchestrate',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({controller_id:ctrl.id,message:msg})});
+        body:JSON.stringify({controller_id:ctrl.id,message:msg,generate_code:genCode})});
     }catch(netErr){
       throw new Error('网络连接失败，请确认服务已启动（端口 8765）');
     }
@@ -1332,7 +1432,7 @@ async function runOrch(){
   // ── 轮询任务完成（SSE 关闭后兜底同步最终状态）──────────────────
   const pollDone = async () => {
     for(let i=0; i<120; i++){
-      await new Promise(r=>setTimeout(r,3000));
+      await new Promise(r=>setTimeout(r,500));
       try{
         const r=await fetch(`/tasks/${taskId}`);
         if(!r.ok) continue;
@@ -1397,6 +1497,18 @@ document.getElementById('n-ctrl').addEventListener('change',function(){
 });
 
 loadAll();
+
+// 每 5 秒自动刷新任务列表（有编排任务进行中时更频繁由 pollDone 负责）
+setInterval(async ()=>{
+  try{
+    const tr=await fetch('/tasks'); if(!tr.ok)return;
+    const newTasks=await tr.json();
+    // 只有数量或状态变化时才更新，避免抖动
+    const changed = newTasks.length!==allTasks.length
+      || newTasks.some((t,i)=>!allTasks[i]||t.status!==allTasks[i].status);
+    if(changed){ allTasks=newTasks; renderTasks(); renderStats(); }
+  }catch(_){}
+}, 500);
 </script>
 </body>
 </html>
